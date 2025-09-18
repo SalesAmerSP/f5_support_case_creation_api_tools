@@ -7,9 +7,6 @@ def parse_args():
     parser.add_argument("--host", type=str, help="BIG-IP hostname", required=True, default="")
     parser.add_argument("--username", type=str, help="BIG-IP username", required=False, default="admin")
     parser.add_argument("--password", type=str, help="BIG-IP password", required=True, default="")
-    parser.add_argument("--filename", type=str, help="QKView filename", required=False)
-    parser.add_argument("--skip-wait", action="store_true", help="Skip the wait for QKView to complete", required=False)
-    parser.add_argument("--wait-interval", type=int, help="Wait interval in seconds", required=False, default=10)
     return parser.parse_args()
 
 def main():
