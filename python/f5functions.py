@@ -24,7 +24,7 @@ def bigip_connectivity_test(_bigip_host, _bigip_username, _bigip_password):
     _api_query.auth = (_bigip_username, _bigip_password)
     _api_query.headers = {'accept': 'application/json'}
     try:
-        _api_response = requests.get(_api_query.url, auth=_api_query.auth, headers=_api_query.headers)
+        _api_response = requests.get(_api_query.url, auth=_api_query.auth, headers=_api_query.headers, verify=False)
     except requests.exceptions.RequestException as e:
         raise SystemExit(e)
     return _api_response
@@ -37,7 +37,7 @@ def bigip_generate_qkview(_bigip_host, _bigip_username, _bigip_password, _qkview
         _api_query.headers = {'content-type': 'application/json'}
         _api_query.data = {'command': 'run', 'utilCmdArgs': f'-s0 -f {_qkview_filename}'}
         try:
-            _api_response = requests.post(_api_query.url, auth=_api_query.auth, headers=_api_query.headers, json=_api_query.data)
+            _api_response = requests.post(_api_query.url, auth=_api_query.auth, headers=_api_query.headers, json=_api_query.data, verify=False)
         except requests.exceptions.RequestException as e:
             raise SystemExit(e)
         return _api_response                
@@ -48,7 +48,7 @@ def bigip_generate_qkview(_bigip_host, _bigip_username, _bigip_password, _qkview
         _api_query.headers = {'content-type': 'application/json'}
         _api_query.data = {'name': _qkview_filename}
         try:
-            _api_response = requests.post(_api_query.url, auth=_api_query.auth, headers=_api_query.headers, json=_api_query.data)
+            _api_response = requests.post(_api_query.url, auth=_api_query.auth, headers=_api_query.headers, json=_api_query.data, verify=False)
         except requests.exceptions.RequestException as e:
             raise SystemExit(e)
         return _api_response
@@ -62,7 +62,7 @@ def bigip_list_qkviews(_bigip_host, _bigip_username, _bigip_password):
     _api_query.auth = (_bigip_username, _bigip_password)
     _api_query.headers = {'accept': 'application/json'}
     try:
-        _api_response = requests.get(_api_query.url, auth=_api_query.auth, headers=_api_query.headers)
+        _api_response = requests.get(_api_query.url, auth=_api_query.auth, headers=_api_query.headers, verify=False)
     except requests.exceptions.RequestException as e:
         raise SystemExit(e)
     return _api_response
@@ -73,7 +73,7 @@ def bigip_query_qkview_task(_bigip_host, _bigip_username, _bigip_password, _qkvi
     _api_query.auth = (_bigip_username, _bigip_password)
     _api_query.headers = {'accept': 'application/json'}
     try:
-        _api_response = requests.get(_api_query.url, auth=_api_query.auth, headers=_api_query.headers)
+        _api_response = requests.get(_api_query.url, auth=_api_query.auth, headers=_api_query.headers, verify=False)
     except requests.exceptions.RequestException as e:
         raise SystemExit(e)
     return _api_response
@@ -159,7 +159,7 @@ def bigip_delete_qkview(_bigip_host, _bigip_username, _bigip_password, _qkview_f
             _api_query.auth = (_bigip_username, _bigip_password)    
             _api_query.headers = {'accept': 'application/json'}
             try:
-                _api_response = requests.delete(_api_query.url, auth=_api_query.auth, headers=_api_query.headers)
+                _api_response = requests.delete(_api_query.url, auth=_api_query.auth, headers=_api_query.headers, verify=False)
             except requests.exceptions.RequestException as e:
                 raise SystemExit(e)
             return _api_response
