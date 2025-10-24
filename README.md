@@ -5,16 +5,27 @@ Generates a proactive support case using MyF5 and iHealth; includes qkview gener
 - [myf5\_proactive\_case\_generation](#myf5_proactive_case_generation)
   - [Index](#index)
   - [Support](#support)
+  - [Pre-requisites](#pre-requisites)
   - [Toolset](#toolset)
     - [BIG-IP Tools](#big-ip-tools)
     - [iHealth Tools](#ihealth-tools)
     - [MyF5.com Tools](#myf5com-tools)
-  - [Pre-requisites](#pre-requisites)
   - [Usage](#usage)
 
 ## Support
 
 This is not an official F5 tool. Support for this tool is not provided by F5, Inc. Usage is at your own risk. Please report any issues to [github](https://github.com/f5devcentral/myf5_proactive_case_generation/issues). The MyF5 API, iHealth API and iControl REST API is subject to change at any time. This tool set was developed and tested using TMOS 17.5.0. 
+
+## Pre-requisites
+
+- valid client-id and client-secret from MyF5.com
+- valid client-id and client-secret from iHealth
+- valid username and password for the BIG-IP(s)
+- valid hostname/IP address for the BIG-IP(s)
+- TMOS version for each host for case creation
+- valid serial number for one of the BIG-IP(s) to create cases
+  - NOTE: Must be a valid serial number covered under a current support contract
+- For proactive support cases, a valid maintenance window (Date and Start/Stop times) must be provided for support awareness. Note that opening a proactive case does not schedule a support engineer to join the bridge; if support is needed during the maintenance window, you must contact support and ask for assistance. Reference the proactive notification case; do not create a new case.
 
 ## Toolset
 
@@ -75,7 +86,7 @@ This is a collection of tools that can be used to generate a proactive support c
     - ``--host``: The hostname of the BIG-IP.
     - ``--username``: The username for the BIG-IP.
     - ``--password``: The password for the BIG-IP.
-    - ``--filename``: The id of the QKView to delete.
+    - ``--filename``: The name of the QKView to delete.
 
 ### iHealth Tools
 
@@ -90,7 +101,7 @@ This is a collection of tools that can be used to generate a proactive support c
 
     Optional arguments:
 
-    - ``--app-id``: The Advanced Users Only - Support App ID. Do not use unless instructed by the F5 account team.
+    - ``--app-id``: Advanced Users Only - Support App ID. Do not use unless instructed by F5.
 
 - ihealth_list_qkviews.py
 
@@ -103,7 +114,7 @@ This is a collection of tools that can be used to generate a proactive support c
 
     Optional arguments:
 
-    - ``--app-id``: The Advanced Users Only - Support App ID. Do not use unless instructed by the F5 account team.
+    - ``--app-id``: Advanced Users Only - Support App ID. Do not use unless instructed by F5.
 
 - ihealth_upload_qkview.py
 
@@ -118,7 +129,7 @@ This is a collection of tools that can be used to generate a proactive support c
     Optional arguments:
 
     - ``--support-case``: Existing support case number to which to attach the QKView.
-    - ``--app-id``: The Advanced Users Only - Support App ID. Do not use unless instructed by the F5 account team.
+    - ``--app-id``: Advanced Users Only - Support App ID. Do not use unless instructed by F5.
 
 ### MyF5.com Tools
 
@@ -133,7 +144,7 @@ This is a collection of tools that can be used to generate a proactive support c
 
     Optional arguments:
 
-    - ``--app-id``: The Advanced Users Only - overwrite Support App ID.
+    - ``--app-id``: Advanced Users Only - overwrite Support App ID.
 
 - myf5_create_inputs_file.py
   
@@ -147,9 +158,9 @@ This is a collection of tools that can be used to generate a proactive support c
 
     Optional arguments:
 
-    - ``--app-id``: The Advanced Users Only - overwrite Support App ID.
-    - ``--api-url``: The Advanced Users Only - overwrite Support API URL.
-    - ``--k-value``: The Advanced Users Only - overwrite required API k value.
+    - ``--app-id``: Advanced Users Only - overwrite Support App ID.
+    - ``--api-url``: Advanced Users Only - overwrite Support API URL.
+    - ``--k-value``: Advanced Users Only - overwrite required API k value.
 
 - myf5_create_new_support_case.py
 
@@ -163,9 +174,9 @@ This is a collection of tools that can be used to generate a proactive support c
 
     Optional arguments:
 
-    - ``--app-id``: The Advanced Users Only - overwrite Support App ID.
-    - ``--api-url``: The Advanced Users Only - overwrite Support API URL.
-    - ``--k-value``: The Advanced Users Only - overwrite required API k value.
+    - ``--app-id``: Advanced Users Only - overwrite Support App ID.
+    - ``--api-url``: Advanced Users Only - overwrite Support API URL.
+    - ``--k-value``: Advanced Users Only - overwrite required API k value.
 
 - myf5_add_comments_to_existing_case.py
 
@@ -175,14 +186,14 @@ This is a collection of tools that can be used to generate a proactive support c
 
     - ``--client-id``: The Support API Key.
     - ``--client-secret``: The Support API Secret.
-    - ``--case-number``: The F5 Support Case Number.
+    - ``--case-number``: F5 Support Case Number.
     - ``--comment-text-file``: The name of the file containing notes to attach.
 
     Optional arguments:
 
-    - ``--app-id``: The Advanced Users Only - overwrite Support App ID.
-    - ``--api-url``: The Advanced Users Only - overwrite Support API URL.
-    - ``--k-value``: The Advanced Users Only - overwrite required API k value.
+    - ``--app-id``: Advanced Users Only - overwrite Support App ID.
+    - ``--api-url``: Advanced Users Only - overwrite Support API URL.
+    - ``--k-value``: Advanced Users Only - overwrite required API k value.
 
 - myf5_list_existing_cases.py
 
@@ -196,9 +207,9 @@ This is a collection of tools that can be used to generate a proactive support c
     Optional arguments:
 
     - ``--show-closed``: Show closed cases.
-    - ``--app-id``: The Advanced Users Only - overwrite Support App ID.
-    - ``--api-url``: The Advanced Users Only - overwrite Support API URL.
-    - ``--k-value``: The Advanced Users Only - overwrite required API k value.
+    - ``--app-id``: Advanced Users Only - overwrite Support App ID.
+    - ``--api-url``: Advanced Users Only - overwrite Support API URL.
+    - ``--k-value``: Advanced Users Only - overwrite required API k value.
   
 - myf5_retrieve_case_creation_metadata.py
 
@@ -213,20 +224,9 @@ This is a collection of tools that can be used to generate a proactive support c
 
     - ``--output-file``: The name of the output JSON file.
     - ``--output-to-stdout``: Output to stdout
-    - ``--app-id``: The Advanced Users Only - overwrite Support App ID.
-    - ``--api-url``: The Advanced Users Only - overwrite Support API URL.
-    - ``--k-value``: The Advanced Users Only - overwrite required API k value.
-
-## Pre-requisites
-
-- valid client-id and client-secret from MyF5.com
-- valid client-id and client-secret from iHealth
-- valid username and password for the BIG-IP(s)
-- valid hostname for the BIG-IP(s)
-- TMOS version for each host
-- valid serial number for one of the BIG-IP(s) 
-  - NOTE: Must be a valid serial number covered under a current support contract
-- For proactive support cases, a valid maintenance window (Date and Start/Stop times) must be provided for support awareness. Note that opening a proactive case does not schedule a support engineer to join the bridge; if support is needed during the maintenance window, you must contact support and ask for assistance. Reference the proactive notification case; do not create a new case.
+    - ``--app-id``: Advanced Users Only - overwrite Support App ID.
+    - ``--api-url``: Advanced Users Only - overwrite Support API URL.
+    - ``--k-value``: Advanced Users Only - overwrite required API k value.
 
 ## Usage
 
