@@ -1,276 +1,324 @@
-import requests
-import base64
+import argparse
+import logging
 import os
-import tqdm 
+import requests
+import tqdm
 import urllib3
 from urllib3.exceptions import InsecureRequestWarning
 
-# disable insecure warnings
-urllib3.disable_warnings(InsecureRequestWarning)
+# Constants
+MYF5_APP_ID = 'aus19gt5bu0jGw9Fi358'
+IHEALTH_APP_ID = 'ausp95ykc80HOU7SQ357'
+MYF5_API_K_VALUE = 'UKKD3Vxv7NHrM3QmYk8Fk2mZnLtljAKX'
+MYF5_API_FQDN = 'support.apis.f5.com'
+IHEALTH_API_FQDN = 'ihealth2-api.f5.com'
 
-def generate_basic_auth_string():
-    if not os.environ.get('IHEALTH_CLIENT_ID') or not os.environ.get('IHEALTH_CLIENT_SECRET'):
-        raise Exception('IHEALTH_CLIENT_ID and IHEALTH_CLIENT_SECRET environment variables must be set.')
-    client_id = os.environ['IHEALTH_CLIENT_ID']
-    client_secret = os.environ['IHEALTH_CLIENT_SECRET']
-    basic_auth_string = f'{client_id}:{client_secret}'
-    ascii_bytes = basic_auth_string.encode('ascii')
-    base64_bytes = base64.b64encode(ascii_bytes)
-    return base64_bytes.decode()
+logger = logging.getLogger(__name__)
 
-def bigip_connectivity_test(_bigip_host, _bigip_username, _bigip_password):
-    _api_query = requests.Request()
-    _api_query.url = 'https://' + _bigip_host + '/mgmt/tm/sys/ready'
-    _api_query.auth = (_bigip_username, _bigip_password)
-    _api_query.headers = {'accept': 'application/json'}
+
+# ---------------------------------------------------------------------------
+# Shared argument parsers
+# ---------------------------------------------------------------------------
+
+def _bigip_base_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--host", type=str, help="BIG-IP hostname", required=True)
+    parser.add_argument("--username", type=str, help="BIG-IP username", required=False, default="admin")
+    parser.add_argument("--password", type=str, help="BIG-IP password", required=True)
+    parser.add_argument("--no-ssl-verify", action="store_true", help="Disable SSL certificate verification for BIG-IP", default=False)
+    return parser
+
+
+def bigip_args(*extra_args):
+    parser = _bigip_base_parser()
+    for arg_args, arg_kwargs in extra_args:
+        parser.add_argument(*arg_args, **arg_kwargs)
+    return parser.parse_args()
+
+
+def _ihealth_base_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--client-id', help='Support API Key', required=True)
+    parser.add_argument('--client-secret', help='Support API Secret', required=True)
+    parser.add_argument('--app-id', help='Advanced Users Only - Support App ID', required=False, default=IHEALTH_APP_ID)
+    return parser
+
+
+def ihealth_args(*extra_args):
+    parser = _ihealth_base_parser()
+    for arg_args, arg_kwargs in extra_args:
+        parser.add_argument(*arg_args, **arg_kwargs)
+    return parser.parse_args()
+
+
+def _myf5_base_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--client-id', help='Support API Key', required=True)
+    parser.add_argument('--client-secret', help='Support API Secret', required=True)
+    parser.add_argument('--app-id', type=str, help='Advanced Users Only - overwrite Support App ID', required=False, default=MYF5_APP_ID)
+    parser.add_argument('--api-url', help='Advanced Users Only - Support API URL', required=False, default="https://support.f5.com")
+    parser.add_argument('--k-value', help='Advanced Users Only - overwrite required API k value', required=False, default=MYF5_API_K_VALUE)
+    return parser
+
+
+def myf5_args(*extra_args):
+    parser = _myf5_base_parser()
+    for arg_args, arg_kwargs in extra_args:
+        parser.add_argument(*arg_args, **arg_kwargs)
+    return parser.parse_args()
+
+
+# ---------------------------------------------------------------------------
+# Auth helper
+# ---------------------------------------------------------------------------
+
+def myf5_authenticate(app_id, client_id, client_secret, scope='myf5_scope'):
+    response = myf5_retrieve_access_token(app_id, client_id, client_secret, scope=scope)
+    if response.status_code != 200:
+        raise SystemExit(f'Failed to retrieve API Token.\nStatus code: {response.status_code} Full response: {response.text}')
+    print('Authentication successful.')
+    return response.json()["access_token"]
+
+
+# ---------------------------------------------------------------------------
+# BIG-IP API functions
+# ---------------------------------------------------------------------------
+
+def _bigip_url(host, path):
+    return f'https://{host}{path}'
+
+
+def _bigip_request(method, host, path, username, password, verify=True, **kwargs):
+    url = _bigip_url(host, path)
+    if not verify:
+        urllib3.disable_warnings(InsecureRequestWarning)
     try:
-        _api_response = requests.get(_api_query.url, auth=_api_query.auth, headers=_api_query.headers, verify=False)
+        return method(url, auth=(username, password), verify=verify, **kwargs)
     except requests.exceptions.RequestException as e:
         raise SystemExit(e)
-    return _api_response
 
-def bigip_generate_qkview(_bigip_host, _bigip_username, _bigip_password, _qkview_filename, _no_truncate=False):
-    if _no_truncate:
-        _api_query = requests.Request()
-        _api_query.url = 'https://' + _bigip_host + '/mgmt/tm/util/qkview'
-        _api_query.auth = (_bigip_username, _bigip_password)
-        _api_query.headers = {'content-type': 'application/json'}
-        _api_query.data = {'command': 'run', 'utilCmdArgs': f'-s0 -f {_qkview_filename}'}
-        try:
-            _api_response = requests.post(_api_query.url, auth=_api_query.auth, headers=_api_query.headers, json=_api_query.data, verify=False)
-        except requests.exceptions.RequestException as e:
-            raise SystemExit(e)
-        return _api_response                
-    elif _no_truncate == False:        
-        _api_query = requests.Request()
-        _api_query.url = 'https://' + _bigip_host + '/mgmt/cm/autodeploy/qkview'
-        _api_query.auth = (_bigip_username, _bigip_password)
-        _api_query.headers = {'content-type': 'application/json'}
-        _api_query.data = {'name': _qkview_filename}
-        try:
-            _api_response = requests.post(_api_query.url, auth=_api_query.auth, headers=_api_query.headers, json=_api_query.data, verify=False)
-        except requests.exceptions.RequestException as e:
-            raise SystemExit(e)
-        return _api_response
+
+def bigip_connectivity_test(host, username, password, verify=True):
+    return _bigip_request(
+        requests.get, host, '/mgmt/tm/sys/ready',
+        username, password, verify=verify,
+        headers={'accept': 'application/json'}
+    )
+
+
+def bigip_generate_qkview(host, username, password, filename, no_truncate=False, verify=True):
+    if no_truncate:
+        return _bigip_request(
+            requests.post, host, '/mgmt/tm/util/qkview',
+            username, password, verify=verify,
+            headers={'content-type': 'application/json'},
+            json={'command': 'run', 'utilCmdArgs': f'-s0 -f {filename}'}
+        )
     else:
-        raise Exception('no_truncate must be True or False')
+        return _bigip_request(
+            requests.post, host, '/mgmt/cm/autodeploy/qkview',
+            username, password, verify=verify,
+            headers={'content-type': 'application/json'},
+            json={'name': filename}
+        )
 
 
-def bigip_list_qkviews(_bigip_host, _bigip_username, _bigip_password):
-    _api_query = requests.Request()
-    _api_query.url = 'https://' + _bigip_host + '/mgmt/cm/autodeploy/qkview/'
-    _api_query.auth = (_bigip_username, _bigip_password)
-    _api_query.headers = {'accept': 'application/json'}
-    try:
-        _api_response = requests.get(_api_query.url, auth=_api_query.auth, headers=_api_query.headers, verify=False)
-    except requests.exceptions.RequestException as e:
-        raise SystemExit(e)
-    return _api_response
+def bigip_list_qkviews(host, username, password, verify=True):
+    return _bigip_request(
+        requests.get, host, '/mgmt/cm/autodeploy/qkview/',
+        username, password, verify=verify,
+        headers={'accept': 'application/json'}
+    )
 
-def bigip_query_qkview_task(_bigip_host, _bigip_username, _bigip_password, _qkview_task_id):
-    _api_query = requests.Request()
-    _api_query.url = 'https://' + _bigip_host + '/mgmt/cm/autodeploy/qkview/' + _qkview_task_id
-    _api_query.auth = (_bigip_username, _bigip_password)
-    _api_query.headers = {'accept': 'application/json'}
-    try:
-        _api_response = requests.get(_api_query.url, auth=_api_query.auth, headers=_api_query.headers, verify=False)
-    except requests.exceptions.RequestException as e:
-        raise SystemExit(e)
-    return _api_response
 
-def bigip_download_qkview(_bigip_host, _bigip_username, _bigip_password, _qkview_filename, _local_filename=None):
-    _api_query = requests.Request()
-    _api_query.url = 'https://' + _bigip_host + '/mgmt/cm/autodeploy/qkview-downloads/' + _qkview_filename
-    _api_query.auth = (_bigip_username, _bigip_password)
-    _api_query.headers = {'Content-type': 'application/octet-stream'}
-    _output_filename = os.path.basename(_qkview_filename) if _local_filename is None else os.path.basename(_local_filename)
-    _pbar = None
-    with open(_output_filename, 'wb') as f:
-        _download_chunk_size = 512 * 1024
-        _download_start = 0
-        _download_end = _download_chunk_size - 1
-        _download_size = 0
-        _download_current_bytes = 0
+def bigip_query_qkview_task(host, username, password, task_id, verify=True):
+    return _bigip_request(
+        requests.get, host, f'/mgmt/cm/autodeploy/qkview/{task_id}',
+        username, password, verify=verify,
+        headers={'accept': 'application/json'}
+    )
+
+
+def bigip_download_qkview(host, username, password, filename, local_filename=None, verify=True):
+    url = _bigip_url(host, f'/mgmt/cm/autodeploy/qkview-downloads/{filename}')
+    if not verify:
+        urllib3.disable_warnings(InsecureRequestWarning)
+    output_filename = os.path.basename(filename) if local_filename is None else os.path.basename(local_filename)
+    pbar = None
+    with open(output_filename, 'wb') as f:
+        chunk_size = 512 * 1024
+        start = 0
+        end = chunk_size - 1
+        total_size = 0
+        current_bytes = 0
 
         while True:
-            _content_range = '%s-%s/%s' % (_download_start, _download_end, _download_size)
-            _api_query.headers['Content-Range'] = _content_range
-            
-            _api_response = requests.get(_api_query.url, auth=_api_query.auth, headers=_api_query.headers, verify=False, stream=True)
-            
-            if _api_response.status_code == 200:
-                # If the size is zero, then this is the first time through the
-                # loop and we don't want to write data because we haven't yet
-                # figured out the total size of the file.
-                if _download_size > 0:
-                    # Update progress bar with current chunk
-                    if _pbar:
-                        _pbar.update(min(_download_chunk_size, _download_size - _download_current_bytes + 1))
-                    
-                    _download_current_bytes += _download_chunk_size
-                    for chunk in _api_response.iter_content(_download_chunk_size):
-                        f.write(chunk)
-                
-                # Once we've downloaded the entire file, we can break out of
-                # the loop
-                if _download_end == _download_size:
-                    break
-            
-            crange = _api_response.headers['Content-Range']
-            
-            # Determine the total number of bytes to read
-            if _download_size == 0:
-                _download_size = int(crange.split('/')[-1]) - 1
-                
-                # Initialize progress bar now that we know the file size
-                _pbar = tqdm.tqdm(
-                    total=_download_size + 1,  # +1 because size is 0-indexed
-                    unit='B',
-                    unit_scale=True,
-                    desc=os.path.basename(_output_filename)
-                )
-                
-                # If the file is smaller than the chunk size, BIG-IP will
-                # return an HTTP 400. So adjust the chunk_size down to the
-                # total file size...
-                if _download_chunk_size > _download_size:
-                    _download_end = _download_size
-                # ...and pass on the rest of the code
-                continue
-            
-            _download_start += _download_chunk_size
-            if (_download_current_bytes + _download_chunk_size) > _download_size:
-                _download_end = _download_size
-            else:
-                _download_end = _download_start + _download_chunk_size - 1
-    
-    # Close progress bar
-    if _pbar:
-        _pbar.close()
-
-def bigip_delete_qkview(_bigip_host, _bigip_username, _bigip_password, _qkview_filename):
-    _qkview_list = bigip_list_qkviews(_bigip_host, _bigip_username, _bigip_password)
-    for _current_qkview in _qkview_list.json()['items']:
-        if _current_qkview['name'] == _qkview_filename:
-            _qkview_id = _current_qkview['id']
-            print(f'Found QKview {_current_qkview["name"]} with ID {_current_qkview["id"]}')
-            _api_query = requests.Request()
-            _api_query.url = 'https://' + _bigip_host + '/mgmt/cm/autodeploy/qkview/' + _qkview_id
-            _api_query.auth = (_bigip_username, _bigip_password)    
-            _api_query.headers = {'accept': 'application/json'}
+            content_range = f'{start}-{end}/{total_size}'
+            headers = {
+                'Content-type': 'application/octet-stream',
+                'Content-Range': content_range
+            }
             try:
-                _api_response = requests.delete(_api_query.url, auth=_api_query.auth, headers=_api_query.headers, verify=False)
+                response = requests.get(url, auth=(username, password), headers=headers, verify=verify, stream=True)
             except requests.exceptions.RequestException as e:
                 raise SystemExit(e)
-            return _api_response
-    raise SystemExit(f'QKview {_qkview_filename} not found on BIG-IP {_bigip_host}')
 
-def myf5_retrieve_access_token(_support_app_id, _client_id, _client_secret, scope='myf5_scope'):
-    _api_query = requests.Request()
-    _api_query.url = f'https://identity.account.f5.com/oauth2/{_support_app_id}/v1/token'
-    _api_query.auth = (_client_id, _client_secret)
-    _api_query.headers = {'Content-type': 'application/x-www-form-urlencoded'}
-    _api_query.data = {'grant_type': 'client_credentials', 'scope': scope}
-    try:
-        _api_response = requests.post(_api_query.url, auth=_api_query.auth, data=_api_query.data, headers=_api_query.headers)
-    except requests.exceptions.RequestException as e:
-        raise SystemExit(e)    
-    return _api_response
+            if response.status_code == 200:
+                if total_size > 0:
+                    if pbar:
+                        pbar.update(min(chunk_size, total_size - current_bytes + 1))
+                    current_bytes += chunk_size
+                    for chunk in response.iter_content(chunk_size):
+                        f.write(chunk)
+                if end == total_size:
+                    break
 
-def myf5_list_support_cases(_access_token, _support_api_fqdn='support.apis.f5.com', _api_k_value='UKKD3Vxv7NHrM3QmYk8Fk2mZnLtljAKX'):
-    _api_query = requests.Request()
-    _api_query.url = 'https://' + _support_api_fqdn + '/case-management/v1/cases' + '?type=ALL_CASES' + '&k=' + _api_k_value
-    _api_query.headers = {'accept': 'application/json', 'Authorization': 'Bearer ' + _access_token}
-    try:
-        _api_response = requests.get(_api_query.url, auth=_api_query.auth, headers=_api_query.headers)
-    except requests.exceptions.RequestException as e:
-        raise SystemExit(e)
-    return _api_response
+            if 'Content-Range' not in response.headers:
+                raise SystemExit(f'Unexpected response (status {response.status_code}): missing Content-Range header')
 
-def myf5_create_new_support_case(_access_token, _json_payload, _support_api_fqdn='support.apis.f5.com', _api_k_value='UKKD3Vxv7NHrM3QmYk8Fk2mZnLtljAKX'):
-    _api_request = requests.Request()
-    _api_request.url = 'https://' + _support_api_fqdn + '/case-management/v1/cases' + '?k=' + _api_k_value
-    _api_request.headers = {'content-type': 'application/json', 'accept': 'application/json', 'Authorization': 'Bearer ' + _access_token}
-    try:
-        _api_response = requests.post(_api_request.url, auth=_api_request.auth, headers=_api_request.headers, json=_json_payload)
-    except Exception as e:
-        raise SystemExit(e)
-    return _api_response
+            crange = response.headers['Content-Range']
 
-def myf5_add_comments_to_existing_support_case(_access_token, _case_number, _comments, _support_api_fqdn='support.apis.f5.com', _api_k_value='UKKD3Vxv7NHrM3QmYk8Fk2mZnLtljAKX'):
-    _api_request = requests.Request()
-    _api_request.url = 'https://' + _support_api_fqdn + '/case-management/v1/cases/' + f'{_case_number}' + '?k=' + _api_k_value
-    _api_request.headers = {'content-type': 'application/json', 'accept': 'application/json', 'Authorization': 'Bearer ' + _access_token}
-    _json_payload = {'comments': f'{_comments}'}
-    try:
-        _api_response = requests.patch(_api_request.url, auth=_api_request.auth, headers=_api_request.headers, json=_json_payload)
-    except Exception as e:
-        raise SystemExit(e)
-    return _api_response
+            if total_size == 0:
+                total_size = int(crange.split('/')[-1]) - 1
+                pbar = tqdm.tqdm(
+                    total=total_size + 1,
+                    unit='B',
+                    unit_scale=True,
+                    desc=os.path.basename(output_filename)
+                )
+                if chunk_size > total_size:
+                    end = total_size
+                continue
 
-def myf5_retrieve_case_creation_metadata(_access_token, _support_api_fqdn='support.apis.f5.com', _api_k_value='UKKD3Vxv7NHrM3QmYk8Fk2mZnLtljAKX'):
-    _api_query = requests.Request()
-    _api_query.url = 'https://' + _support_api_fqdn + '/case-management/v1/cases/metadata' + '?k=' + _api_k_value
-    _api_query.headers = {'accept': 'application/json', 'Authorization': 'Bearer ' + _access_token}
-    try:
-        _api_response = requests.get(_api_query.url, auth=_api_query.auth, headers=_api_query.headers)
-    except requests.exceptions.RequestException as e:
-        raise SystemExit(e)
-    return _api_response
+            start += chunk_size
+            if (current_bytes + chunk_size) > total_size:
+                end = total_size
+            else:
+                end = start + chunk_size - 1
 
-def ihealth_list_qkview_ids(_access_token, _ihealth_api_fqdn='ihealth2-api.f5.com'):
-    _api_query = requests.Request()
-    _api_query.url = 'https://' + _ihealth_api_fqdn + '/qkview-analyzer/api/qkviews/'
-    _api_query.headers = {'accept': 'application/vnd.f5.ihealth.api.v1.0+json', 'Authorization': 'Bearer ' + _access_token}
-    try:
-        _api_response = requests.get(_api_query.url, auth=_api_query.auth, headers=_api_query.headers)
-    except requests.exceptions.RequestException as e:
-        raise SystemExit(e)
-    return _api_response
+    if pbar:
+        pbar.close()
 
-def ihealth_show_qkview_metadata(_access_token, _qkview_id, _ihealth_api_fqdn='ihealth2-api.f5.com'):
-    _api_query = requests.Request()
-    _api_query.url = 'https://' + _ihealth_api_fqdn + '/qkview-analyzer/api/qkviews/' + str(_qkview_id)
-    _api_query.headers = {'accept': 'application/vnd.f5.ihealth.api.v1.0+json', 'Authorization': 'Bearer ' + _access_token}
-    try:
-        _api_response = requests.get(_api_query.url, auth=_api_query.auth, headers=_api_query.headers)
-    except requests.exceptions.RequestException as e:
-        raise SystemExit(e)
-    return _api_response
 
-def ihealth_upload_qkview(_access_token, _qkview_filename, _support_case_number='', _ihealth_api_fqdn='ihealth2-api.f5.com'):
-    _api_request = requests.Request()
-    _api_request.url = 'https://' + _ihealth_api_fqdn + '/qkview-analyzer/api/qkviews'
-    _api_request.headers = {
-        'Authorization': f'Bearer {_access_token}', 
-        'Accept': 'application/vnd.f5.ihealth.api', 
-        'User-Agent': 'MyGreatiHealthClient'
-        }
-    # ensure that file exists
-    if not os.path.isfile(_qkview_filename):
-        raise SystemExit(f'File {_qkview_filename} does not exist.')
-    # upload the file to iHealth
-    with open(_qkview_filename, 'rb') as f:
-        _file_size = os.path.getsize(_qkview_filename)
-        with open(_qkview_filename, 'rb') as f:
-            _api_request.params = {
-                'visible_in_gui': 'true',
-                'share_with_case_owner': 'true',
-                'description': 'uploaded via automation'
-            }
-            # add support case number, if provided
-            if _support_case_number:
-                _api_request.params['f5_support_case'] = _support_case_number
-            # add the file
-            _api_request.files = {
-                'qkview': (os.path.basename(_qkview_filename), f)
-            }
-            # send the request
-            _api_response = requests.post(
-                _api_request.url,
-                files=_api_request.files,
-                headers=_api_request.headers,
-                params=_api_request.params
+def bigip_delete_qkview(host, username, password, filename, verify=True):
+    qkview_list = bigip_list_qkviews(host, username, password, verify=verify)
+    if qkview_list.status_code != 200:
+        raise SystemExit(f'Failed to list QKviews.\nStatus code: {qkview_list.status_code} Full response: {qkview_list.text}')
+    for current_qkview in qkview_list.json().get('items', []):
+        if current_qkview['name'] == filename:
+            qkview_id = current_qkview['id']
+            print(f'Found QKview {current_qkview["name"]} with ID {qkview_id}')
+            return _bigip_request(
+                requests.delete, host, f'/mgmt/cm/autodeploy/qkview/{qkview_id}',
+                username, password, verify=verify,
+                headers={'accept': 'application/json'}
             )
-    return _api_response
+    raise SystemExit(f'QKview {filename} not found on BIG-IP {host}')
 
+
+# ---------------------------------------------------------------------------
+# MyF5 API functions
+# ---------------------------------------------------------------------------
+
+def myf5_retrieve_access_token(app_id, client_id, client_secret, scope='myf5_scope'):
+    url = f'https://identity.account.f5.com/oauth2/{app_id}/v1/token'
+    try:
+        return requests.post(
+            url,
+            auth=(client_id, client_secret),
+            data={'grant_type': 'client_credentials', 'scope': scope},
+            headers={'Content-type': 'application/x-www-form-urlencoded'}
+        )
+    except requests.exceptions.RequestException as e:
+        raise SystemExit(e)
+
+
+def myf5_list_support_cases(access_token, api_fqdn=MYF5_API_FQDN, k_value=MYF5_API_K_VALUE):
+    url = f'https://{api_fqdn}/case-management/v1/cases?type=ALL_CASES&k={k_value}'
+    try:
+        return requests.get(url, headers={'accept': 'application/json', 'Authorization': f'Bearer {access_token}'})
+    except requests.exceptions.RequestException as e:
+        raise SystemExit(e)
+
+
+def myf5_create_new_support_case(access_token, json_payload, api_fqdn=MYF5_API_FQDN, k_value=MYF5_API_K_VALUE):
+    url = f'https://{api_fqdn}/case-management/v1/cases?k={k_value}'
+    try:
+        return requests.post(
+            url,
+            headers={'content-type': 'application/json', 'accept': 'application/json', 'Authorization': f'Bearer {access_token}'},
+            json=json_payload
+        )
+    except requests.exceptions.RequestException as e:
+        raise SystemExit(e)
+
+
+def myf5_add_comments_to_existing_support_case(access_token, case_number, comments, api_fqdn=MYF5_API_FQDN, k_value=MYF5_API_K_VALUE):
+    url = f'https://{api_fqdn}/case-management/v1/cases/{case_number}?k={k_value}'
+    try:
+        return requests.patch(
+            url,
+            headers={'content-type': 'application/json', 'accept': 'application/json', 'Authorization': f'Bearer {access_token}'},
+            json={'comments': str(comments)}
+        )
+    except requests.exceptions.RequestException as e:
+        raise SystemExit(e)
+
+
+def myf5_retrieve_case_creation_metadata(access_token, api_fqdn=MYF5_API_FQDN, k_value=MYF5_API_K_VALUE):
+    url = f'https://{api_fqdn}/case-management/v1/cases/metadata?k={k_value}'
+    try:
+        return requests.get(url, headers={'accept': 'application/json', 'Authorization': f'Bearer {access_token}'})
+    except requests.exceptions.RequestException as e:
+        raise SystemExit(e)
+
+
+# ---------------------------------------------------------------------------
+# iHealth API functions
+# ---------------------------------------------------------------------------
+
+def ihealth_list_qkview_ids(access_token, api_fqdn=IHEALTH_API_FQDN):
+    url = f'https://{api_fqdn}/qkview-analyzer/api/qkviews/'
+    try:
+        return requests.get(url, headers={
+            'accept': 'application/vnd.f5.ihealth.api.v1.0+json',
+            'Authorization': f'Bearer {access_token}'
+        })
+    except requests.exceptions.RequestException as e:
+        raise SystemExit(e)
+
+
+def ihealth_show_qkview_metadata(access_token, qkview_id, api_fqdn=IHEALTH_API_FQDN):
+    url = f'https://{api_fqdn}/qkview-analyzer/api/qkviews/{qkview_id}'
+    try:
+        return requests.get(url, headers={
+            'accept': 'application/vnd.f5.ihealth.api.v1.0+json',
+            'Authorization': f'Bearer {access_token}'
+        })
+    except requests.exceptions.RequestException as e:
+        raise SystemExit(e)
+
+
+def ihealth_upload_qkview(access_token, filename, support_case_number='', api_fqdn=IHEALTH_API_FQDN):
+    url = f'https://{api_fqdn}/qkview-analyzer/api/qkviews'
+    if not os.path.isfile(filename):
+        raise SystemExit(f'File {filename} does not exist.')
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Accept': 'application/vnd.f5.ihealth.api',
+        'User-Agent': 'MyGreatiHealthClient'
+    }
+    params = {
+        'visible_in_gui': 'true',
+        'share_with_case_owner': 'true',
+        'description': 'uploaded via automation'
+    }
+    if support_case_number:
+        params['f5_support_case'] = support_case_number
+    with open(filename, 'rb') as f:
+        return requests.post(
+            url,
+            files={'qkview': (os.path.basename(filename), f)},
+            headers=headers,
+            params=params
+        )

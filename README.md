@@ -240,6 +240,6 @@ There are connectivity tests for each of the APIs that you will be using for the
 2. For each BIG-IP, run the bigip_download_qkview.py tool to download the QKView from the device.
 3. For each BIG-IP, run the bigip_delete_qkview.py tool to delete the QKView from the device.
 4. Run the myf5_create_inputs_file.py tool to create the inputs file for creating a support case on MyF5.com. You may use other tools such as Jinja to create the inputs file, but valid inputs are required. If using another tool to create the inputs file, the myf5_retrieve_case_creation_metadata.py tool can be used to retrieve the metadata needed to validate the inputs. 
-5. Run the myf5_create_new_support_case.py tool to create a new support case on MyF5.com. You will be presented with the new case number and a link to the support case in MyF5.com.
-6. Run the ihealth_upload_qkviews.py tool to upload the QKViews to iHealth. You can specify the case number so that the qkview is attached to the newly created support case. 
+5. Run the myf5_create_new_case.py tool to create a new support case on MyF5.com. You will be presented with the new case number and a link to the support case in MyF5.com.
+6. Run the ihealth_upload_qkview.py tool to upload the QKViews to iHealth. You can specify the case number so that the qkview is attached to the newly created support case. 
 7. Optionally, you may use the myf5_add_comments_to_existing_case.py tool to add comments to the existing support case on MyF5.com.
