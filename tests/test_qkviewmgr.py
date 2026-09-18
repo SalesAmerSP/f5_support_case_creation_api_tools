@@ -5,11 +5,14 @@ import sys
 import unittest
 from unittest.mock import patch, MagicMock
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "qkviewmgr"))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
-import qkviewmgr
-import f5functions
+_src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
+
+import qkviewmgr.qkviewmgr as qkviewmgr
+import qkviewmgr.f5functions as f5functions
+sys.modules['qkviewmgr'] = qkviewmgr
+sys.modules['f5functions'] = f5functions
 
 
 
