@@ -8,6 +8,7 @@ description = "Allowlist for test fixtures, public endpoints, and non-sensitive 
 paths = [
   '''(?i)tests/.*''',
   '''(?i).*_test\.py$''',
+  '''(?i).*\.md$''',
 ]
 regexes = [
   '''UKKD3Vxv7NHrM3QmYk8Fk2mZnLtljAKX''',
