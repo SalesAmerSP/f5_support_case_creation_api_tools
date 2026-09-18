@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "f5-support-case-creation-api-tools"
-version = "1.1.0"
+version = "1.2.0"
 description = "CLI tools for F5 BIG-IP QKView generation, retrieval, and MyF5/iHealth support case integration"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -26,8 +26,8 @@ classifiers = [
 dependencies = [
     "certifi>=2026.7.22",
     "requests>=2.34.2",
-    "tqdm>=4.70.0",
-    "urllib3>=2.7.0",
+    "tqdm>=4.70.1",
+    "urllib3>=2.8.0",
 ]
 
 [project.scripts]
@@ -36,7 +36,7 @@ qkviewmgr = "qkviewmgr.qkviewmgr:main"
 [project.optional-dependencies]
 dev = [
     "pytest>=9.1.1",
-    "pip-audit>=2.7.3",
+    "pip-audit>=2.10.1",
 ]
 
 [tool.setuptools.packages.find]

@@ -1,6 +1,6 @@
 """qkviewmgr package - F5 support case creation and QKView automation toolset."""
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 from . import f5functions
 from . import gui
