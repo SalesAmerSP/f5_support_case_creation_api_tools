@@ -106,8 +106,8 @@ export F5_CLIENT_SECRET="YourF5SupportAPIClientSecret"
 Store API credentials in `~/.ihealth_credentials` (mode `0600`):
 ```ini
 [default]
-clientid = JyLTjnHsBhGhm8eykbyJUmTcVy4fllbU
-clientsecret = O2QL0nVXodOo9lQTkXjUWNW-zq6Wa-uULjTHAacCqwAJFQGtc2Zwq_3JOlASKC8Z
+clientid = <your-f5-client-id>
+clientsecret = <your-f5-client-secret>
 ```
 
 > [!IMPORTANT]

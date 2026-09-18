@@ -16,3 +16,8 @@ e198f7f98e04cb5d1035f7a682708dc9e2a50d77:python/f5functions.py:generic-api-key:2
 e198f7f98e04cb5d1035f7a682708dc9e2a50d77:python/f5functions.py:generic-api-key:221
 e198f7f98e04cb5d1035f7a682708dc9e2a50d77:python/f5functions.py:generic-api-key:231
 e198f7f98e04cb5d1035f7a682708dc9e2a50d77:python/f5functions.py:generic-api-key:241
+58503d3a26ebad20a590d85566b3902b95843033:README.md:generic-api-key:82
+58503d3a26ebad20a590d85566b3902b95843033:README.md:generic-api-key:83
+58503d3a26ebad20a590d85566b3902b95843033:README.md:bigip-admin-password:73
+15af48640c305443cf7a8956c1d5a051565d1170:src/qkviewmgr/f5functions.py:bigip-admin-password:226
+15af48640c305443cf7a8956c1d5a051565d1170:src/qkviewmgr/f5functions.py:bigip-admin-password:240
