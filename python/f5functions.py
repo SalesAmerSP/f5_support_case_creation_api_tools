@@ -1,3 +1,12 @@
+"""Shared functions and CLI argument parsers for F5 support case creation tools.
+
+This module provides reusable utilities for interacting with:
+  - F5 BIG-IP devices via iControl REST (connectivity, QKView generation, download, and deletion).
+  - F5 Identity Services via OAuth2 (supporting both Okta and Auth0 per K000162308).
+  - F5 iHealth API (connectivity, QKView metadata queries, and multipart uploads).
+  - MyF5 Case Management API (listing cases, creating cases, adding comments, and metadata).
+"""
+
 import argparse
 import logging
 import os
@@ -6,14 +15,49 @@ import tqdm
 import urllib3
 from urllib3.exceptions import InsecureRequestWarning
 
+# ---------------------------------------------------------------------------
 # Constants
+# ---------------------------------------------------------------------------
+
+# Legacy Okta Identity Endpoints (Pre-August 31, 2026; retirement end of September 2026 per K000162308)
+OKTA_IDENTITY_FQDN = 'identity.account.f5.com'
 MYF5_APP_ID = 'aus19gt5bu0jGw9Fi358'
 IHEALTH_APP_ID = 'ausp95ykc80HOU7SQ357'
-MYF5_API_K_VALUE = 'UKKD3Vxv7NHrM3QmYk8Fk2mZnLtljAKX'
+
+# Modern Auth0 Identity Endpoints (Post-August 31, 2026 per K000162308 / K15202)
+AUTH0_IDENTITY_FQDN = 'idp.identity.f5.com'
+AUTH0_TOKEN_PATH = '/oauth/token'
+
+# Default Identity FQDN
+IDENTITY_API_FQDN = OKTA_IDENTITY_FQDN
+
+# API Endpoints
 MYF5_API_FQDN = 'support.apis.f5.com'
+MYF5_API_K_VALUE = 'UKKD3Vxv7NHrM3QmYk8Fk2mZnLtljAKX'
+
 IHEALTH_API_FQDN = 'ihealth2-api.f5.com'
+IHEALTH_FALLBACK_API_FQDN = 'ihealth-api.f5.com'
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Utility helpers
+# ---------------------------------------------------------------------------
+
+def _clean_fqdn(val, default=None):
+    """Strip protocol schemes and trailing slashes from an FQDN or URL string.
+
+    Args:
+        val (str or None): The raw input FQDN or URL.
+        default (str or None): Fallback default value if val is empty.
+
+    Returns:
+        str: Sanitized FQDN string (e.g. 'support.apis.f5.com').
+    """
+    if not val:
+        return default
+    return val.replace('https://', '').replace('http://', '').strip('/')
 
 
 # ---------------------------------------------------------------------------
@@ -21,15 +65,28 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _bigip_base_parser():
+    """Create the base argument parser for BIG-IP CLI commands.
+
+    Returns:
+        argparse.ArgumentParser: Parser configured with BIG-IP options.
+    """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", type=str, help="BIG-IP hostname", required=True)
-    parser.add_argument("--username", type=str, help="BIG-IP username", required=False, default="admin")
+    parser.add_argument("--host", type=str, help="BIG-IP hostname or IP address", required=True)
+    parser.add_argument("--username", type=str, help="BIG-IP username (default: admin)", required=False, default="admin")
     parser.add_argument("--password", type=str, help="BIG-IP password", required=True)
     parser.add_argument("--no-ssl-verify", action="store_true", help="Disable SSL certificate verification for BIG-IP", default=False)
     return parser
 
 
 def bigip_args(*extra_args):
+    """Parse base BIG-IP arguments alongside any tool-specific arguments.
+
+    Args:
+        *extra_args: Variable length tuples of (*args, **kwargs) passed to add_argument.
+
+    Returns:
+        argparse.Namespace: Parsed CLI options.
+    """
     parser = _bigip_base_parser()
     for arg_args, arg_kwargs in extra_args:
         parser.add_argument(*arg_args, **arg_kwargs)
@@ -37,14 +94,30 @@ def bigip_args(*extra_args):
 
 
 def _ihealth_base_parser():
+    """Create the base argument parser for iHealth CLI commands.
+
+    Returns:
+        argparse.ArgumentParser: Parser configured with iHealth options.
+    """
     parser = argparse.ArgumentParser()
-    parser.add_argument('--client-id', help='Support API Key', required=True)
-    parser.add_argument('--client-secret', help='Support API Secret', required=True)
-    parser.add_argument('--app-id', help='Advanced Users Only - Support App ID', required=False, default=IHEALTH_APP_ID)
+    parser.add_argument('--client-id', help='Support API Key / Client ID', required=True)
+    parser.add_argument('--client-secret', help='Support API Secret / Client Secret', required=True)
+    parser.add_argument('--app-id', help='Support App ID (default: outp95ykc80HOU7SQ357)', required=False, default=IHEALTH_APP_ID)
+    parser.add_argument('--auth-url', help='Direct OAuth2 token URL override', required=False, default=None)
+    parser.add_argument('--auth-fqdn', help=f'Identity Provider FQDN (default: {IDENTITY_API_FQDN})', required=False, default=IDENTITY_API_FQDN)
+    parser.add_argument('--api-fqdn', help=f'iHealth API FQDN (default: {IHEALTH_API_FQDN})', required=False, default=IHEALTH_API_FQDN)
     return parser
 
 
 def ihealth_args(*extra_args):
+    """Parse base iHealth arguments alongside any tool-specific arguments.
+
+    Args:
+        *extra_args: Variable length tuples of (*args, **kwargs) passed to add_argument.
+
+    Returns:
+        argparse.Namespace: Parsed CLI options.
+    """
     parser = _ihealth_base_parser()
     for arg_args, arg_kwargs in extra_args:
         parser.add_argument(*arg_args, **arg_kwargs)
@@ -52,16 +125,31 @@ def ihealth_args(*extra_args):
 
 
 def _myf5_base_parser():
+    """Create the base argument parser for MyF5 CLI commands.
+
+    Returns:
+        argparse.ArgumentParser: Parser configured with MyF5 options.
+    """
     parser = argparse.ArgumentParser()
-    parser.add_argument('--client-id', help='Support API Key', required=True)
-    parser.add_argument('--client-secret', help='Support API Secret', required=True)
-    parser.add_argument('--app-id', type=str, help='Advanced Users Only - overwrite Support App ID', required=False, default=MYF5_APP_ID)
-    parser.add_argument('--api-url', help='Advanced Users Only - Support API URL', required=False, default="https://support.f5.com")
-    parser.add_argument('--k-value', help='Advanced Users Only - overwrite required API k value', required=False, default=MYF5_API_K_VALUE)
+    parser.add_argument('--client-id', help='Support API Key / Client ID', required=True)
+    parser.add_argument('--client-secret', help='Support API Secret / Client Secret', required=True)
+    parser.add_argument('--app-id', type=str, help='Support App ID (default: aus19gt5bu0jGw9Fi358)', required=False, default=MYF5_APP_ID)
+    parser.add_argument('--auth-url', help='Direct OAuth2 token URL override', required=False, default=None)
+    parser.add_argument('--auth-fqdn', help=f'Identity Provider FQDN (default: {IDENTITY_API_FQDN})', required=False, default=IDENTITY_API_FQDN)
+    parser.add_argument('--api-url', help=f'Support API FQDN or URL (default: {MYF5_API_FQDN})', required=False, default=MYF5_API_FQDN)
+    parser.add_argument('--k-value', help='MyF5 Gateway API k value', required=False, default=MYF5_API_K_VALUE)
     return parser
 
 
 def myf5_args(*extra_args):
+    """Parse base MyF5 arguments alongside any tool-specific arguments.
+
+    Args:
+        *extra_args: Variable length tuples of (*args, **kwargs) passed to add_argument.
+
+    Returns:
+        argparse.Namespace: Parsed CLI options.
+    """
     parser = _myf5_base_parser()
     for arg_args, arg_kwargs in extra_args:
         parser.add_argument(*arg_args, **arg_kwargs)
@@ -72,9 +160,39 @@ def myf5_args(*extra_args):
 # Auth helper
 # ---------------------------------------------------------------------------
 
-def myf5_authenticate(app_id, client_id, client_secret, scope='myf5_scope'):
-    response = myf5_retrieve_access_token(app_id, client_id, client_secret, scope=scope)
+def myf5_authenticate(app_id, client_id, client_secret, scope='myf5_scope', auth_url=None, auth_fqdn=IDENTITY_API_FQDN):
+    """Authenticate against F5 Identity Services and retrieve a Bearer access token.
+
+    Supports both legacy Okta authentication and modern Auth0 authentication per K000162308.
+
+    Args:
+        app_id (str): Authorization server app ID (for Okta).
+        client_id (str): F5 Support API Client ID.
+        client_secret (str): F5 Support API Client Secret.
+        scope (str): OAuth2 scope ('myf5_scope' or 'ihealth').
+        auth_url (str, optional): Explicit token endpoint URL override.
+        auth_fqdn (str, optional): FQDN of the identity provider.
+
+    Returns:
+        str: OAuth2 Bearer access token string.
+
+    Raises:
+        SystemExit: If authentication fails or HTTP status is not 200.
+    """
+    response = myf5_retrieve_access_token(
+        app_id, client_id, client_secret,
+        scope=scope, auth_url=auth_url, auth_fqdn=auth_fqdn
+    )
     if response.status_code != 200:
+        if response.status_code in (401, 403):
+            raise SystemExit(
+                f'Failed to retrieve API Token (Status code: {response.status_code}).\n'
+                f'Response: {response.text}\n'
+                f'Note: F5 migrated its Identity Platform from Okta to Auth0 on August 31, 2026 (K000162308).\n'
+                f'- If credentials have expired, generate new credentials in iHealth Settings or MyF5.\n'
+                f'- For Auth0-issued credentials, specify --auth-fqdn idp.identity.f5.com or supply --auth-url.\n'
+                f'- Verify firewall allowlists per K15202 (identity.account.f5.com and idp.identity.f5.com).'
+            )
         raise SystemExit(f'Failed to retrieve API Token.\nStatus code: {response.status_code} Full response: {response.text}')
     print('Authentication successful.')
     return response.json()["access_token"]
@@ -85,10 +203,36 @@ def myf5_authenticate(app_id, client_id, client_secret, scope='myf5_scope'):
 # ---------------------------------------------------------------------------
 
 def _bigip_url(host, path):
+    """Build an HTTPS URL targeting a BIG-IP host.
+
+    Args:
+        host (str): BIG-IP hostname or IP address.
+        path (str): URI path starting with a forward slash.
+
+    Returns:
+        str: Fully qualified HTTPS URL.
+    """
     return f'https://{host}{path}'
 
 
 def _bigip_request(method, host, path, username, password, verify=True, **kwargs):
+    """Execute an authenticated HTTP request against a BIG-IP device.
+
+    Args:
+        method (callable): Requests HTTP method function (e.g. requests.get, requests.post).
+        host (str): BIG-IP hostname or IP.
+        path (str): API endpoint path.
+        username (str): BIG-IP admin username.
+        password (str): BIG-IP admin password.
+        verify (bool): Whether to verify SSL certificates (default: True).
+        **kwargs: Additional arguments forwarded to requests method.
+
+    Returns:
+        requests.Response: HTTP response from BIG-IP.
+
+    Raises:
+        SystemExit: On network connection errors or unreachable host.
+    """
     url = _bigip_url(host, path)
     if not verify:
         urllib3.disable_warnings(InsecureRequestWarning)
@@ -99,6 +243,17 @@ def _bigip_request(method, host, path, username, password, verify=True, **kwargs
 
 
 def bigip_connectivity_test(host, username, password, verify=True):
+    """Verify HTTP connectivity and authentication against BIG-IP system readiness.
+
+    Args:
+        host (str): BIG-IP hostname or IP.
+        username (str): BIG-IP username.
+        password (str): BIG-IP password.
+        verify (bool): Whether to verify SSL certificates.
+
+    Returns:
+        requests.Response: HTTP response from /mgmt/tm/sys/ready.
+    """
     return _bigip_request(
         requests.get, host, '/mgmt/tm/sys/ready',
         username, password, verify=verify,
@@ -107,6 +262,19 @@ def bigip_connectivity_test(host, username, password, verify=True):
 
 
 def bigip_generate_qkview(host, username, password, filename, no_truncate=False, verify=True):
+    """Trigger QKView generation on a BIG-IP device.
+
+    Args:
+        host (str): BIG-IP hostname or IP.
+        username (str): BIG-IP username.
+        password (str): BIG-IP password.
+        filename (str): Name of the QKView archive to produce.
+        no_truncate (bool): When True, generates complete QKView via /mgmt/tm/util/qkview with -s0.
+        verify (bool): Whether to verify SSL certificates.
+
+    Returns:
+        requests.Response: HTTP response containing task creation details.
+    """
     if no_truncate:
         return _bigip_request(
             requests.post, host, '/mgmt/tm/util/qkview',
@@ -124,6 +292,17 @@ def bigip_generate_qkview(host, username, password, filename, no_truncate=False,
 
 
 def bigip_list_qkviews(host, username, password, verify=True):
+    """List all completed QKViews present on a BIG-IP device.
+
+    Args:
+        host (str): BIG-IP hostname or IP.
+        username (str): BIG-IP username.
+        password (str): BIG-IP password.
+        verify (bool): Whether to verify SSL certificates.
+
+    Returns:
+        requests.Response: HTTP response containing JSON list of QKViews.
+    """
     return _bigip_request(
         requests.get, host, '/mgmt/cm/autodeploy/qkview/',
         username, password, verify=verify,
@@ -132,6 +311,18 @@ def bigip_list_qkviews(host, username, password, verify=True):
 
 
 def bigip_query_qkview_task(host, username, password, task_id, verify=True):
+    """Query the status of an ongoing QKView generation task on BIG-IP.
+
+    Args:
+        host (str): BIG-IP hostname or IP.
+        username (str): BIG-IP username.
+        password (str): BIG-IP password.
+        task_id (str): The ID of the autodeploy qkview task.
+        verify (bool): Whether to verify SSL certificates.
+
+    Returns:
+        requests.Response: HTTP response containing task status.
+    """
     return _bigip_request(
         requests.get, host, f'/mgmt/cm/autodeploy/qkview/{task_id}',
         username, password, verify=verify,
@@ -140,6 +331,19 @@ def bigip_query_qkview_task(host, username, password, task_id, verify=True):
 
 
 def bigip_download_qkview(host, username, password, filename, local_filename=None, verify=True):
+    """Download a QKView file from BIG-IP using chunked HTTP Range requests.
+
+    Args:
+        host (str): BIG-IP hostname or IP.
+        username (str): BIG-IP username.
+        password (str): BIG-IP password.
+        filename (str): Name of the remote QKView file on BIG-IP.
+        local_filename (str, optional): Target local destination filename.
+        verify (bool): Whether to verify SSL certificates.
+
+    Raises:
+        SystemExit: On missing Content-Range header or network failure.
+    """
     url = _bigip_url(host, f'/mgmt/cm/autodeploy/qkview-downloads/{filename}')
     if not verify:
         urllib3.disable_warnings(InsecureRequestWarning)
@@ -201,6 +405,21 @@ def bigip_download_qkview(host, username, password, filename, local_filename=Non
 
 
 def bigip_delete_qkview(host, username, password, filename, verify=True):
+    """Delete a generated QKView from BIG-IP by filename.
+
+    Args:
+        host (str): BIG-IP hostname or IP.
+        username (str): BIG-IP username.
+        password (str): BIG-IP password.
+        filename (str): Name of the QKView to locate and remove.
+        verify (bool): Whether to verify SSL certificates.
+
+    Returns:
+        requests.Response: HTTP response from DELETE request.
+
+    Raises:
+        SystemExit: If listing fails or QKView filename is not found.
+    """
     qkview_list = bigip_list_qkviews(host, username, password, verify=verify)
     if qkview_list.status_code != 200:
         raise SystemExit(f'Failed to list QKviews.\nStatus code: {qkview_list.status_code} Full response: {qkview_list.text}')
@@ -220,21 +439,82 @@ def bigip_delete_qkview(host, username, password, filename, verify=True):
 # MyF5 API functions
 # ---------------------------------------------------------------------------
 
-def myf5_retrieve_access_token(app_id, client_id, client_secret, scope='myf5_scope'):
-    url = f'https://identity.account.f5.com/oauth2/{app_id}/v1/token'
+def myf5_retrieve_access_token(app_id, client_id, client_secret, scope='myf5_scope',
+                               auth_url=None, auth_fqdn=IDENTITY_API_FQDN):
+    """Retrieve an OAuth2 token from F5 Identity services (Okta or Auth0).
+
+    Args:
+        app_id (str): Authorization server app ID (for Okta).
+        client_id (str): F5 Support API Client ID.
+        client_secret (str): F5 Support API Client Secret.
+        scope (str): Token scope ('myf5_scope' or 'ihealth').
+        auth_url (str, optional): Explicit token URL override.
+        auth_fqdn (str, optional): Identity provider FQDN (default: identity.account.f5.com).
+
+    Returns:
+        requests.Response: HTTP response containing the OAuth2 token payload.
+
+    Raises:
+        SystemExit: If connection fails, citing K15202 firewall guidance.
+    """
+    clean_auth_fqdn = _clean_fqdn(auth_fqdn, default=IDENTITY_API_FQDN)
+    if auth_url:
+        url = auth_url
+        payload = {
+            'grant_type': 'client_credentials',
+            'client_id': client_id,
+            'client_secret': client_secret,
+            'scope': scope
+        }
+        headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+        auth = None
+    elif 'idp.identity.f5.com' in clean_auth_fqdn:
+        url = f'https://{clean_auth_fqdn}{AUTH0_TOKEN_PATH}'
+        payload = {
+            'grant_type': 'client_credentials',
+            'client_id': client_id,
+            'client_secret': client_secret,
+            'scope': scope
+        }
+        headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+        auth = None
+    else:
+        # Legacy Okta Authorization Server
+        url = f'https://{clean_auth_fqdn}/oauth2/{app_id}/v1/token'
+        payload = {'grant_type': 'client_credentials', 'scope': scope}
+        headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+        auth = requests.auth.HTTPBasicAuth(client_id, client_secret)
+
     try:
         return requests.post(
             url,
-            auth=(client_id, client_secret),
-            data={'grant_type': 'client_credentials', 'scope': scope},
-            headers={'Content-type': 'application/x-www-form-urlencoded'}
+            auth=auth,
+            data=payload,
+            headers=headers
         )
     except requests.exceptions.RequestException as e:
-        raise SystemExit(e)
+        raise SystemExit(
+            f'Failed to connect to F5 Identity token endpoint ({url}): {e}\n'
+            f'Note: Check firewall egress per K15202 (identity.account.f5.com and idp.identity.f5.com).'
+        )
 
 
 def myf5_list_support_cases(access_token, api_fqdn=MYF5_API_FQDN, k_value=MYF5_API_K_VALUE):
-    url = f'https://{api_fqdn}/case-management/v1/cases?type=ALL_CASES&k={k_value}'
+    """Retrieve existing support cases from MyF5 Case Management API.
+
+    Args:
+        access_token (str): Bearer access token.
+        api_fqdn (str): MyF5 API FQDN (default: support.apis.f5.com).
+        k_value (str): MyF5 client gateway key.
+
+    Returns:
+        requests.Response: HTTP response containing cases JSON list.
+
+    Raises:
+        SystemExit: On network request error.
+    """
+    fqdn = _clean_fqdn(api_fqdn, default=MYF5_API_FQDN)
+    url = f'https://{fqdn}/case-management/v1/cases?type=ALL_CASES&k={k_value}'
     try:
         return requests.get(url, headers={'accept': 'application/json', 'Authorization': f'Bearer {access_token}'})
     except requests.exceptions.RequestException as e:
@@ -242,7 +522,22 @@ def myf5_list_support_cases(access_token, api_fqdn=MYF5_API_FQDN, k_value=MYF5_A
 
 
 def myf5_create_new_support_case(access_token, json_payload, api_fqdn=MYF5_API_FQDN, k_value=MYF5_API_K_VALUE):
-    url = f'https://{api_fqdn}/case-management/v1/cases?k={k_value}'
+    """Submit a new support case creation request to MyF5.
+
+    Args:
+        access_token (str): Bearer access token.
+        json_payload (dict): Structured case details matching MyF5 schema.
+        api_fqdn (str): MyF5 API FQDN (default: support.apis.f5.com).
+        k_value (str): MyF5 client gateway key.
+
+    Returns:
+        requests.Response: HTTP response containing created case number and details.
+
+    Raises:
+        SystemExit: On network request error.
+    """
+    fqdn = _clean_fqdn(api_fqdn, default=MYF5_API_FQDN)
+    url = f'https://{fqdn}/case-management/v1/cases?k={k_value}'
     try:
         return requests.post(
             url,
@@ -254,7 +549,23 @@ def myf5_create_new_support_case(access_token, json_payload, api_fqdn=MYF5_API_F
 
 
 def myf5_add_comments_to_existing_support_case(access_token, case_number, comments, api_fqdn=MYF5_API_FQDN, k_value=MYF5_API_K_VALUE):
-    url = f'https://{api_fqdn}/case-management/v1/cases/{case_number}?k={k_value}'
+    """Append text comments or notes to an existing MyF5 support case.
+
+    Args:
+        access_token (str): Bearer access token.
+        case_number (str): Target F5 support case number.
+        comments (str): Text comments to attach.
+        api_fqdn (str): MyF5 API FQDN (default: support.apis.f5.com).
+        k_value (str): MyF5 client gateway key.
+
+    Returns:
+        requests.Response: HTTP response from PATCH request.
+
+    Raises:
+        SystemExit: On network request error.
+    """
+    fqdn = _clean_fqdn(api_fqdn, default=MYF5_API_FQDN)
+    url = f'https://{fqdn}/case-management/v1/cases/{case_number}?k={k_value}'
     try:
         return requests.patch(
             url,
@@ -266,7 +577,21 @@ def myf5_add_comments_to_existing_support_case(access_token, case_number, commen
 
 
 def myf5_retrieve_case_creation_metadata(access_token, api_fqdn=MYF5_API_FQDN, k_value=MYF5_API_K_VALUE):
-    url = f'https://{api_fqdn}/case-management/v1/cases/metadata?k={k_value}'
+    """Retrieve metadata (allowed products, versions, severities) for MyF5 case creation.
+
+    Args:
+        access_token (str): Bearer access token.
+        api_fqdn (str): MyF5 API FQDN (default: support.apis.f5.com).
+        k_value (str): MyF5 client gateway key.
+
+    Returns:
+        requests.Response: HTTP response containing metadata JSON schema.
+
+    Raises:
+        SystemExit: On network request error.
+    """
+    fqdn = _clean_fqdn(api_fqdn, default=MYF5_API_FQDN)
+    url = f'https://{fqdn}/case-management/v1/cases/metadata?k={k_value}'
     try:
         return requests.get(url, headers={'accept': 'application/json', 'Authorization': f'Bearer {access_token}'})
     except requests.exceptions.RequestException as e:
@@ -278,31 +603,91 @@ def myf5_retrieve_case_creation_metadata(access_token, api_fqdn=MYF5_API_FQDN, k
 # ---------------------------------------------------------------------------
 
 def ihealth_list_qkview_ids(access_token, api_fqdn=IHEALTH_API_FQDN):
-    url = f'https://{api_fqdn}/qkview-analyzer/api/qkviews/'
+    """Fetch the list of all QKView IDs uploaded to iHealth.
+
+    Supports automatic fallback to secondary iHealth endpoint if primary fails.
+
+    Args:
+        access_token (str): Bearer access token.
+        api_fqdn (str): iHealth API FQDN (default: ihealth2-api.f5.com).
+
+    Returns:
+        requests.Response: HTTP response containing JSON list of QKView IDs.
+
+    Raises:
+        SystemExit: On network request failure across primary and fallback endpoints.
+    """
+    fqdn = _clean_fqdn(api_fqdn, default=IHEALTH_API_FQDN)
+    url = f'https://{fqdn}/qkview-analyzer/api/qkviews/'
+    headers = {
+        'accept': 'application/vnd.f5.ihealth.api.v1.0+json',
+        'Authorization': f'Bearer {access_token}'
+    }
     try:
-        return requests.get(url, headers={
-            'accept': 'application/vnd.f5.ihealth.api.v1.0+json',
-            'Authorization': f'Bearer {access_token}'
-        })
+        return requests.get(url, headers=headers)
     except requests.exceptions.RequestException as e:
+        if fqdn == IHEALTH_API_FQDN and IHEALTH_FALLBACK_API_FQDN:
+            fallback_url = f'https://{IHEALTH_FALLBACK_API_FQDN}/qkview-analyzer/api/qkviews/'
+            logger.warning('Failed to connect to %s (%s), falling back to %s', url, e, fallback_url)
+            try:
+                return requests.get(fallback_url, headers=headers)
+            except requests.exceptions.RequestException as fb_e:
+                raise SystemExit(f'iHealth request failed on primary ({e}) and fallback ({fb_e})')
         raise SystemExit(e)
 
 
 def ihealth_show_qkview_metadata(access_token, qkview_id, api_fqdn=IHEALTH_API_FQDN):
-    url = f'https://{api_fqdn}/qkview-analyzer/api/qkviews/{qkview_id}'
+    """Fetch diagnostic metadata for a specific QKView analysis on iHealth.
+
+    Args:
+        access_token (str): Bearer access token.
+        qkview_id (str): The unique ID of the QKView on iHealth.
+        api_fqdn (str): iHealth API FQDN (default: ihealth2-api.f5.com).
+
+    Returns:
+        requests.Response: HTTP response containing diagnostic metadata JSON.
+
+    Raises:
+        SystemExit: On network request failure.
+    """
+    fqdn = _clean_fqdn(api_fqdn, default=IHEALTH_API_FQDN)
+    url = f'https://{fqdn}/qkview-analyzer/api/qkviews/{qkview_id}'
+    headers = {
+        'accept': 'application/vnd.f5.ihealth.api.v1.0+json',
+        'Authorization': f'Bearer {access_token}'
+    }
     try:
-        return requests.get(url, headers={
-            'accept': 'application/vnd.f5.ihealth.api.v1.0+json',
-            'Authorization': f'Bearer {access_token}'
-        })
+        return requests.get(url, headers=headers)
     except requests.exceptions.RequestException as e:
+        if fqdn == IHEALTH_API_FQDN and IHEALTH_FALLBACK_API_FQDN:
+            fallback_url = f'https://{IHEALTH_FALLBACK_API_FQDN}/qkview-analyzer/api/qkviews/{qkview_id}'
+            logger.warning('Failed to connect to %s (%s), falling back to %s', url, e, fallback_url)
+            try:
+                return requests.get(fallback_url, headers=headers)
+            except requests.exceptions.RequestException as fb_e:
+                raise SystemExit(f'iHealth request failed on primary ({e}) and fallback ({fb_e})')
         raise SystemExit(e)
 
 
 def ihealth_upload_qkview(access_token, filename, support_case_number='', api_fqdn=IHEALTH_API_FQDN):
-    url = f'https://{api_fqdn}/qkview-analyzer/api/qkviews'
+    """Upload a local QKView file to iHealth for analysis.
+
+    Args:
+        access_token (str): Bearer access token.
+        filename (str): Path to local *.qkview file to upload.
+        support_case_number (str, optional): Support case number to associate with upload.
+        api_fqdn (str): iHealth API FQDN (default: ihealth2-api.f5.com).
+
+    Returns:
+        requests.Response: HTTP response from iHealth upload endpoint.
+
+    Raises:
+        SystemExit: If file does not exist or network upload fails.
+    """
     if not os.path.isfile(filename):
         raise SystemExit(f'File {filename} does not exist.')
+    fqdn = _clean_fqdn(api_fqdn, default=IHEALTH_API_FQDN)
+    url = f'https://{fqdn}/qkview-analyzer/api/qkviews'
     headers = {
         'Authorization': f'Bearer {access_token}',
         'Accept': 'application/vnd.f5.ihealth.api',
@@ -315,10 +700,27 @@ def ihealth_upload_qkview(access_token, filename, support_case_number='', api_fq
     }
     if support_case_number:
         params['f5_support_case'] = support_case_number
-    with open(filename, 'rb') as f:
-        return requests.post(
-            url,
-            files={'qkview': (os.path.basename(filename), f)},
-            headers=headers,
-            params=params
-        )
+
+    try:
+        with open(filename, 'rb') as f:
+            return requests.post(
+                url,
+                files={'qkview': (os.path.basename(filename), f)},
+                headers=headers,
+                params=params
+            )
+    except requests.exceptions.RequestException as e:
+        if fqdn == IHEALTH_API_FQDN and IHEALTH_FALLBACK_API_FQDN:
+            fallback_url = f'https://{IHEALTH_FALLBACK_API_FQDN}/qkview-analyzer/api/qkviews'
+            logger.warning('Failed to upload to %s (%s), falling back to %s', url, e, fallback_url)
+            try:
+                with open(filename, 'rb') as f:
+                    return requests.post(
+                        fallback_url,
+                        files={'qkview': (os.path.basename(filename), f)},
+                        headers=headers,
+                        params=params
+                    )
+            except requests.exceptions.RequestException as fb_e:
+                raise SystemExit(f'iHealth upload failed on primary ({e}) and fallback ({fb_e})')
+        raise SystemExit(e)

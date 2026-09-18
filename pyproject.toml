@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "f5-support-case-creation-api-tools"
+version = "1.1.0"
+description = "CLI tools for F5 BIG-IP QKView generation, retrieval, and MyF5/iHealth support case integration"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Greg Robinson", email = "g.robinson@f5.com" }
+]
+keywords = ["f5", "bigip", "ihealth", "myf5", "qkview", "support-case"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: OS Independent",
+    "Topic :: System :: Networking",
+]
+dependencies = [
+    "certifi>=2026.7.22",
+    "charset-normalizer>=3.5.1",
+    "idna>=3.19",
+    "requests>=2.34.2",
+    "tqdm>=4.70.0",
+    "urllib3>=2.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.setuptools.packages.find]
+where = ["python"]

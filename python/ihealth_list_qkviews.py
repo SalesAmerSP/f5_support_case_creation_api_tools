@@ -1,30 +1,46 @@
-import f5functions
+#!/usr/bin/env python3
+"""List uploaded QKViews and analysis metadata from F5 iHealth.
+
+Supports both Okta and Auth0 authentication endpoints (per K000162308).
+
+Usage:
+    python3 python/ihealth_list_qkviews.py --client-id <id> --client-secret <secret> \
+        [--auth-fqdn idp.identity.f5.com] [--api-fqdn ihealth2-api.f5.com]
+"""
+
 import datetime
+import f5functions
 
 
 def main():
+    """Retrieve all uploaded QKView IDs and display summary diagnostics."""
     args = f5functions.ihealth_args()
-    access_token = f5functions.myf5_authenticate(args.app_id, args.client_id, args.client_secret, scope='ihealth')
+    access_token = f5functions.myf5_authenticate(
+        args.app_id, args.client_id, args.client_secret,
+        scope='ihealth', auth_url=args.auth_url, auth_fqdn=args.auth_fqdn
+    )
 
-    qkview_id_list = f5functions.ihealth_list_qkview_ids(access_token)
+    qkview_id_list = f5functions.ihealth_list_qkview_ids(access_token, api_fqdn=args.api_fqdn)
     if qkview_id_list.status_code != 200:
         raise SystemExit(f'Failed to retrieve QKview IDs.\nStatus code: {qkview_id_list.status_code} Full response: {qkview_id_list.text}')
 
-    for qkview_id in qkview_id_list.json()["id"]:
-        qkview_metadata = f5functions.ihealth_show_qkview_metadata(access_token, qkview_id)
+    ids = qkview_id_list.json().get("id", [])
+    for qkview_id in ids:
+        qkview_metadata = f5functions.ihealth_show_qkview_metadata(access_token, qkview_id, api_fqdn=args.api_fqdn)
         if qkview_metadata.status_code != 200:
-            raise SystemExit(f'Failed to retrieve QKview metadata.\nStatus code: {qkview_metadata.status_code} Full response: {qkview_metadata.text}')
+            raise SystemExit(f'Failed to retrieve QKview metadata for {qkview_id}.\nStatus code: {qkview_metadata.status_code} Full response: {qkview_metadata.text}')
         data = qkview_metadata.json()
         print('*********************************************************************************************')
         print(f' Hostname: {data.get("hostname", "N/A")}')
         print(f' Description: {data.get("description", "N/A")}')
-        created_date = datetime.datetime.fromtimestamp(data["generation_date"] / 1000).strftime('%Y-%m-%d %H:%M:%S')
+        gen_date = data.get("generation_date", 0)
+        created_date = datetime.datetime.fromtimestamp(gen_date / 1000).strftime('%Y-%m-%d %H:%M:%S')
         print(f' Created Date: {created_date}')
         print(f' Chassis Serial: {data.get("chassis_serial", "N/A")}')
         print(f' Support Case: {data.get("f5_support_case", "N/A")}')
         print(f' URL: {data.get("gui_uri", "N/A")}')
         print('*********************************************************************************************')
-    print(f'Total QKview IDs found: {len(qkview_id_list.json()["id"])}')
+    print(f'Total QKview IDs found: {len(ids)}')
 
 
 if __name__ == "__main__":

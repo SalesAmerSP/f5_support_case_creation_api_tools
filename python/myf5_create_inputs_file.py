@@ -1,18 +1,33 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+"""Interactive CLI tool to generate a validated JSON case inputs file for MyF5.
 
-import f5functions
+Fetches dynamic metadata (products, versions, severities, timezones) from MyF5
+to ensure user inputs are schema-compliant before submitting a case.
+
+Usage:
+    python3 python/myf5_create_inputs_file.py --client-id <id> --client-secret <secret> \
+        --output-file case_inputs.json [--auth-fqdn idp.identity.f5.com]
+"""
+
 import json
+import f5functions
 
 
 def main():
+    """Gather case attributes interactively and write to JSON output file."""
     args = f5functions.myf5_args(
-        (["--output-file"], {"type": str, "help": "Output file", "required": True}),
+        (["--output-file"], {"type": str, "help": "Path to write case inputs JSON file", "required": True}),
     )
-    access_token = f5functions.myf5_authenticate(args.app_id, args.client_id, args.client_secret)
+    access_token = f5functions.myf5_authenticate(
+        args.app_id, args.client_id, args.client_secret,
+        scope='myf5_scope', auth_url=args.auth_url, auth_fqdn=args.auth_fqdn
+    )
 
     # Use the case-creation-metadata schema to create a case
-    print('Gathering case metadata from the support API')
-    case_metadata = f5functions.myf5_retrieve_case_creation_metadata(access_token)
+    print('Gathering case metadata from the support API...')
+    case_metadata = f5functions.myf5_retrieve_case_creation_metadata(
+        access_token, api_fqdn=args.api_url, k_value=args.k_value
+    )
     if case_metadata.status_code != 200:
         raise SystemExit(f'Failed to retrieve case metadata.\nStatus code: {case_metadata.status_code} Full response: {case_metadata.text}')
     case_metadata = case_metadata.json()
@@ -160,8 +175,8 @@ def main():
     # Save the inputs to the output file in JSON format
     try:
         with open(args.output_file, 'w') as f:
-            json.dump(inputs, f)
-        print(f'Inputs saved to {args.output_file}')
+            json.dump(inputs, f, indent=2)
+        print(f'Inputs successfully saved to {args.output_file}')
     except OSError as e:
         raise SystemExit(e)
 
