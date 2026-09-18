@@ -27,18 +27,34 @@ def main():
     ids = qkview_id_list.json().get("id", [])
     for qkview_id in ids:
         qkview_metadata = f5functions.ihealth_show_qkview_metadata(access_token, qkview_id, api_fqdn=args.api_fqdn)
-        if qkview_metadata.status_code != 200:
+        if qkview_metadata.status_code not in (200, 202):
             raise SystemExit(f'Failed to retrieve QKview metadata for {qkview_id}.\nStatus code: {qkview_metadata.status_code} Full response: {qkview_metadata.text}')
         data = qkview_metadata.json()
+        proc_status = data.get("processing_status", "COMPLETED")
         print('*********************************************************************************************')
-        print(f' Hostname: {data.get("hostname", "N/A")}')
-        print(f' Description: {data.get("description", "N/A")}')
-        gen_date = data.get("generation_date", 0)
-        created_date = datetime.datetime.fromtimestamp(gen_date / 1000).strftime('%Y-%m-%d %H:%M:%S')
-        print(f' Created Date: {created_date}')
-        print(f' Chassis Serial: {data.get("chassis_serial", "N/A")}')
-        print(f' Support Case: {data.get("f5_support_case", "N/A")}')
-        print(f' URL: {data.get("gui_uri", "N/A")}')
+        print(f' QKView ID: {qkview_id} [Status: {proc_status}]')
+        print(f' Hostname: {data.get("hostname") or "N/A"}')
+        print(f' File Name: {data.get("file_name") or "N/A"}')
+        print(f' Description: {data.get("description") or "N/A"}')
+        gen_date = data.get("generation_date")
+        if gen_date:
+            try:
+                created_date = datetime.datetime.fromtimestamp(gen_date / 1000).strftime('%Y-%m-%d %H:%M:%S')
+            except (ValueError, OSError, TypeError):
+                created_date = str(gen_date)
+        else:
+            upload_date = (data.get("upload") or {}).get("date")
+            if upload_date:
+                try:
+                    created_date = datetime.datetime.fromtimestamp(upload_date / 1000).strftime('%Y-%m-%d %H:%M:%S')
+                except (ValueError, OSError, TypeError):
+                    created_date = str(upload_date)
+            else:
+                created_date = "Processing..."
+        print(f' Date: {created_date}')
+        print(f' Chassis Serial: {data.get("chassis_serial") or "N/A"}')
+        print(f' Support Case: {data.get("f5_support_case") or "N/A"}')
+        print(f' URL: {data.get("gui_uri") or "N/A"}')
         print('*********************************************************************************************')
     print(f'Total QKview IDs found: {len(ids)}')
 
