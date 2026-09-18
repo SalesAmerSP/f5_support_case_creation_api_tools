@@ -900,6 +900,60 @@ def ihealth_list_qkview_ids(access_token, api_fqdn=IHEALTH_API_FQDN):
         raise SystemExit(e)
 
 
+def ihealth_list_qkviews(access_token, api_fqdn=IHEALTH_API_FQDN):
+
+    """Retrieve and display table of existing QKViews and diagnostics from F5 iHealth.
+
+    Args:
+        access_token (str): Bearer access token.
+        api_fqdn (str): iHealth API FQDN.
+
+    Returns:
+        list[dict]: List of parsed QKView metadata dictionaries.
+    """
+    import datetime
+    resp = ihealth_list_qkview_ids(access_token, api_fqdn=api_fqdn)
+    if resp.status_code != 200:
+        logger.error("Failed to retrieve QKView IDs: HTTP %s: %s", resp.status_code, resp.text)
+        return []
+
+    ids = resp.json().get("id", [])
+    results = []
+    for qkview_id in ids:
+        meta_resp = ihealth_show_qkview_metadata(access_token, qkview_id, api_fqdn=api_fqdn)
+        if meta_resp.status_code in (200, 202):
+            data = meta_resp.json()
+            results.append(data)
+            proc_status = data.get("processing_status", "COMPLETE")
+            print("*" * 90)
+            print(f" QKView ID: {qkview_id} [Status: {proc_status}]")
+            print(f" Hostname: {data.get('hostname') or 'N/A'}")
+            print(f" File Name: {data.get('file_name') or 'N/A'}")
+            print(f" Description: {data.get('description') or 'N/A'}")
+            gen_date = data.get("generation_date")
+            if gen_date:
+                try:
+                    created_date = datetime.datetime.fromtimestamp(gen_date / 1000).strftime('%Y-%m-%d %H:%M:%S')
+                except Exception:
+                    created_date = str(gen_date)
+            else:
+                upload_date = (data.get("upload") or {}).get("date")
+                if upload_date:
+                    try:
+                        created_date = datetime.datetime.fromtimestamp(upload_date / 1000).strftime('%Y-%m-%d %H:%M:%S')
+                    except Exception:
+                        created_date = str(upload_date)
+                else:
+                    created_date = "Processing..."
+            print(f" Date: {created_date}")
+            print(f" Chassis Serial: {data.get('chassis_serial') or 'N/A'}")
+            print(f" Support Case: {data.get('f5_support_case') or 'N/A'}")
+            print(f" URL: {data.get('gui_uri') or 'N/A'}")
+            print("*" * 90)
+    print(f"Total QKview IDs found: {len(ids)}")
+    return results
+
+
 def ihealth_show_qkview_metadata(access_token, qkview_id, api_fqdn=IHEALTH_API_FQDN):
     """Fetch diagnostic metadata for a specific QKView analysis on iHealth.
 
