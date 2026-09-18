@@ -43,7 +43,7 @@ def cmd_auto_pilot(args):
     print("=" * 65)
 
     host = args.host
-    username = args.username
+    username = f5functions.resolve_bigip_username(args.username)
     password = f5functions.resolve_bigip_credentials(host, username, args.password)
     verify_ssl = not args.no_ssl_verify
 
@@ -136,7 +136,7 @@ def cmd_auto_pilot(args):
 def cmd_bigip(args):
     action = args.action
     host = args.host
-    username = args.username
+    username = f5functions.resolve_bigip_username(args.username)
     password = f5functions.resolve_bigip_credentials(host, username, args.password)
     verify_ssl = not args.no_ssl_verify
 
@@ -250,11 +250,18 @@ def cmd_doctor(args):
     else:
         print(f"   ℹ F5_CLIENT_ID not set in environment")
 
+    bigip_user = os.getenv("BIGIP_USERNAME") or os.getenv("BIGIP_USER") or os.getenv("F5_USERNAME")
+    if bigip_user:
+        print(f"   ✓ BIGIP_USERNAME set in environment ({bigip_user})")
+    else:
+        print(f"   ℹ BIGIP_USERNAME not set in environment (default: admin)")
+
     bigip_pw = os.getenv("BIGIP_PASSWORD") or os.getenv("F5_PASSWORD")
     if bigip_pw:
         print(f"   ✓ BIGIP_PASSWORD set in environment")
     else:
         print(f"   ℹ BIGIP_PASSWORD not set in environment (will prompt interactively)")
+
 
     print(f"\n3. TLS 1.2+ Network Endpoint Reachability:")
     session = f5functions.get_secure_session(verify=True)
@@ -295,7 +302,7 @@ def main():
     # Subcommand: auto / run
     auto_parser = subparsers.add_parser("run", aliases=["auto"], help="One-touch auto-pilot: generate -> download -> purge remote -> upload to iHealth -> track")
     auto_parser.add_argument("--host", required=True, help="BIG-IP hostname or IP address")
-    auto_parser.add_argument("--username", default="admin", help="BIG-IP username (default: admin)")
+    auto_parser.add_argument("--username", default=None, help="BIG-IP username (default: BIGIP_USERNAME env var or admin)")
     auto_parser.add_argument("--password", default=None, help="BIG-IP password (optional; can be set via BIGIP_PASSWORD or interactive prompt)")
     auto_parser.add_argument("--no-ssl-verify", action="store_true", help="Disable SSL certificate verification for self-signed lab appliances")
     auto_parser.add_argument("--qkview-name", default=None, help="Name of QKView archive to generate")
@@ -314,7 +321,8 @@ def main():
     bigip_parser = subparsers.add_parser("bigip", help="Direct BIG-IP appliance operations")
     bigip_parser.add_argument("action", choices=["test", "list", "generate", "download", "delete"], help="BIG-IP operation")
     bigip_parser.add_argument("--host", required=True, help="BIG-IP hostname or IP address")
-    bigip_parser.add_argument("--username", default="admin", help="BIG-IP username")
+    bigip_parser.add_argument("--username", default=None, help="BIG-IP username (default: BIGIP_USERNAME env var or admin)")
+
     bigip_parser.add_argument("--password", default=None, help="BIG-IP password (optional)")
     bigip_parser.add_argument("--no-ssl-verify", action="store_true", help="Disable SSL certificate verification")
     bigip_parser.add_argument("--filename", default="test.qkview", help="QKView filename on BIG-IP")

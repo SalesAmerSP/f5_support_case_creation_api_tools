@@ -36,7 +36,7 @@ def run_auto_wizard():
         print("Error: BIG-IP host is required.")
         return
 
-    username = _prompt("BIG-IP Username", default=os.getenv("BIGIP_USER", "admin"))
+    username = _prompt("BIG-IP Username", default=os.getenv("BIGIP_USERNAME") or os.getenv("BIGIP_USER", "admin"))
     password = _prompt("BIG-IP Password", default=os.getenv("BIGIP_PASSWORD"), secret=True)
     if not password:
         print("Error: Password is required.")
@@ -122,6 +122,19 @@ def run_doctor_wizard():
         print(f"✓ Found F5_CLIENT_ID in environment")
     else:
         print("ℹ F5_CLIENT_ID not set in environment")
+
+    env_bigip_user = os.getenv("BIGIP_USERNAME") or os.getenv("BIGIP_USER") or os.getenv("F5_USERNAME")
+    if env_bigip_user:
+        print(f"✓ Found BIGIP_USERNAME in environment ({env_bigip_user})")
+    else:
+        print("ℹ BIGIP_USERNAME not set in environment (default: admin)")
+
+    env_bigip_pw = os.getenv("BIGIP_PASSWORD") or os.getenv("F5_PASSWORD")
+    if env_bigip_pw:
+        print("✓ Found BIGIP_PASSWORD in environment")
+    else:
+        print("ℹ BIGIP_PASSWORD not set in environment (will prompt interactively)")
+
 
     # Check network reachability
     print("\n--- Network & TLS Endpoint Reachability ---")

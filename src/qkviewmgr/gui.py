@@ -115,7 +115,7 @@ def launch_gui():
             ttk.Label(frame, text="Username:").grid(row=2, column=0, sticky=tk.W, pady=4)
             self.auto_user = ttk.Entry(frame, width=35)
             self.auto_user.grid(row=2, column=1, sticky=tk.W, pady=4)
-            self.auto_user.insert(0, os.getenv("BIGIP_USER", "admin"))
+            self.auto_user.insert(0, os.getenv("BIGIP_USERNAME") or os.getenv("BIGIP_USER") or "admin")
 
             ttk.Label(frame, text="Password:").grid(row=3, column=0, sticky=tk.W, pady=4)
             self.auto_pw = ttk.Entry(frame, width=35, show="*")
@@ -207,7 +207,7 @@ def launch_gui():
             ttk.Label(frame, text="Username:").grid(row=2, column=0, sticky=tk.W, pady=4)
             self.bigip_user = ttk.Entry(frame, width=35)
             self.bigip_user.grid(row=2, column=1, sticky=tk.W, pady=4)
-            self.bigip_user.insert(0, "admin")
+            self.bigip_user.insert(0, os.getenv("BIGIP_USERNAME") or os.getenv("BIGIP_USER") or "admin")
 
             ttk.Label(frame, text="Password:").grid(row=3, column=0, sticky=tk.W, pady=4)
             self.bigip_pw = ttk.Entry(frame, width=35, show="*")

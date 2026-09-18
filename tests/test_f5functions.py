@@ -148,6 +148,23 @@ class TestF5Functions(unittest.TestCase):
             self.assertEqual(pw, "secret_interactive")
             mock_getpass.assert_called_once()
 
+    def test_resolve_bigip_username_cli(self):
+        """Verify resolve_bigip_username returns explicitly passed CLI argument."""
+        user = f5functions.resolve_bigip_username("custom_admin")
+        self.assertEqual(user, "custom_admin")
+
+    @patch.dict(os.environ, {"BIGIP_USERNAME": "env_user"})
+    def test_resolve_bigip_username_env(self):
+        """Verify resolve_bigip_username reads BIGIP_USERNAME environment variable."""
+        user = f5functions.resolve_bigip_username()
+        self.assertEqual(user, "env_user")
+
+    @patch.dict(os.environ, {}, clear=True)
+    def test_resolve_bigip_username_default(self):
+        """Verify resolve_bigip_username defaults to 'admin' when no argument or env var is set."""
+        user = f5functions.resolve_bigip_username()
+        self.assertEqual(user, "admin")
+
     def test_resolve_ihealth_credentials_cli(self):
         """Verify resolve_ihealth_credentials returns arguments when provided via CLI."""
         cid, csec = f5functions.resolve_ihealth_credentials("cli_id", "cli_sec")

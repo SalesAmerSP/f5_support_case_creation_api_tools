@@ -14,6 +14,7 @@ All example scripts inherit **Zero-Secret CLI Security**:
 - Passwords and client secrets can be entered interactively via masked prompt (`getpass`).
 - Alternatively, export environment variables:
   ```bash
+  export BIGIP_USERNAME="<your-bigip-username>"
   export BIGIP_PASSWORD="<your-bigip-password>"
   export F5_CLIENT_ID="<your-client-id>"
   export F5_CLIENT_SECRET="<your-client-secret>"

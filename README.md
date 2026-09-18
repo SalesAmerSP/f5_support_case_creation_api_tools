@@ -97,6 +97,7 @@ qkviewmgr bigip test --host 18.210.113.51 --username admin
 ### 2. Environment Variables
 You can configure credentials via standard environment variables:
 ```bash
+export BIGIP_USERNAME="admin"
 export BIGIP_PASSWORD="YourAppliancePassword"
 export F5_CLIENT_ID="YourF5SupportAPIClientID"
 export F5_CLIENT_SECRET="YourF5SupportAPIClientSecret"
@@ -156,7 +157,9 @@ Output:
 2. Credential Configuration:
    ✓ Found ~/.ihealth_credentials
    ℹ F5_CLIENT_ID set in environment
+   ✓ BIGIP_USERNAME set in environment (admin)
    ℹ BIGIP_PASSWORD set in environment
+
 
 3. TLS 1.2+ Network Endpoint Reachability:
    ✓ F5 Identity (Legacy) (https://identity.account.f5.com): Reachable (HTTP 200)

@@ -209,17 +209,40 @@ class MultipartProgressStream:
 # Shared argument parsers
 # ---------------------------------------------------------------------------
 
-def resolve_bigip_credentials(host, username, password=None):
+def resolve_bigip_username(username=None):
+    """Resolve BIG-IP username safely from CLI argument, environment, or default.
+
+    Order of resolution:
+    1. Explicit username argument (if provided and non-empty)
+    2. BIGIP_USERNAME, BIGIP_USER, or F5_USERNAME environment variable
+    3. Default: 'admin'
+
+    Args:
+        username (str, optional): Username passed via CLI or function call.
+
+    Returns:
+        str: Resolved BIG-IP username.
+    """
+    if username:
+        return username
+    env_user = os.getenv('BIGIP_USERNAME') or os.getenv('BIGIP_USER') or os.getenv('F5_USERNAME')
+    if env_user:
+        return env_user.strip()
+    return 'admin'
+
+
+def resolve_bigip_credentials(host, username=None, password=None):
     """Resolve BIG-IP credentials safely from CLI, environment, or interactive prompt.
 
     Args:
         host (str): BIG-IP hostname or IP address.
-        username (str): Username.
+        username (str, optional): Username (resolves via resolve_bigip_username if None).
         password (str, optional): Password passed via CLI.
 
     Returns:
         str: BIG-IP password.
     """
+    resolved_user = resolve_bigip_username(username)
     if password:
         logger.warning(
             "Passing secrets via CLI arguments exposes them in process listings (ps) "
@@ -232,13 +255,14 @@ def resolve_bigip_credentials(host, username, password=None):
         return env_pw
 
     if sys.stdin.isatty():
-        prompt_str = f"Enter BIG-IP password for {username}@{host}: "
+        prompt_str = f"Enter BIG-IP password for {resolved_user}@{host}: "
         entered = getpass.getpass(prompt_str).strip()
         if entered:
             return entered
 
     logger.error("BIG-IP password must be provided via BIGIP_PASSWORD environment variable or interactive prompt.")
     sys.exit(1)
+
 
 
 def resolve_ihealth_credentials(client_id=None, client_secret=None, profile=None):
@@ -317,8 +341,20 @@ def _bigip_base_parser():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, help="BIG-IP hostname or IP address", required=True)
-    parser.add_argument("--username", type=str, help="BIG-IP username (default: admin)", required=False, default="admin")
-    parser.add_argument("--password", type=str, help="BIG-IP password (optional; can be set via BIGIP_PASSWORD env var or prompt)", required=False, default=None)
+    parser.add_argument(
+        "--username",
+        type=str,
+        help="BIG-IP username (default: BIGIP_USERNAME env var or admin)",
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        "--password",
+        type=str,
+        help="BIG-IP password (optional; can be set via BIGIP_PASSWORD env var or prompt)",
+        required=False,
+        default=None,
+    )
     parser.add_argument("--no-ssl-verify", action="store_true", help="Disable SSL certificate verification for BIG-IP", default=False)
     return parser
 
@@ -336,8 +372,10 @@ def bigip_args(*extra_args):
     for arg_args, arg_kwargs in extra_args:
         parser.add_argument(*arg_args, **arg_kwargs)
     parsed = parser.parse_args()
+    parsed.username = resolve_bigip_username(parsed.username)
     parsed.password = resolve_bigip_credentials(parsed.host, parsed.username, parsed.password)
     return parsed
+
 
 
 def _ihealth_base_parser():

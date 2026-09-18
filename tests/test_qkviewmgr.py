@@ -50,6 +50,25 @@ class TestQKViewMgr(unittest.TestCase):
 
         mock_test.assert_called_once_with("192.0.2.1", "admin", "secret", verify=False)
 
+    @patch("f5functions.bigip_connectivity_test")
+    @patch("f5functions.resolve_bigip_credentials", return_value="secret")
+    @patch.dict(os.environ, {"BIGIP_USERNAME": "ops_user"})
+    def test_cmd_bigip_test_env_username(self, mock_creds, mock_test):
+        """Verify bigip test uses BIGIP_USERNAME environment variable when username is None."""
+        mock_test.return_value = MagicMock(status_code=200)
+
+        args = MagicMock()
+        args.action = "test"
+        args.host = "192.0.2.1"
+        args.username = None
+        args.password = None
+        args.no_ssl_verify = True
+
+        with patch("sys.stdout"):
+            qkviewmgr.cmd_bigip(args)
+
+        mock_test.assert_called_once_with("192.0.2.1", "ops_user", "secret", verify=False)
+
     @patch("f5functions.ihealth_list_qkviews")
     @patch("f5functions.myf5_authenticate", return_value="tok123")
     @patch("f5functions.resolve_ihealth_credentials", return_value=("cid", "csec"))
