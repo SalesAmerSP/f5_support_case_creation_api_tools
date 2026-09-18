@@ -122,8 +122,56 @@ class TestF5Functions(unittest.TestCase):
             self.assertEqual(args.api_url, f5functions.MYF5_API_FQDN)
 
     # ---------------------------------------------------------------------------
+    # Credential Resolution & Zero Secret CLI tests
+    # ---------------------------------------------------------------------------
+
+    def test_resolve_bigip_credentials_cli(self):
+        """Verify resolve_bigip_credentials returns password with security warning."""
+        pw = f5functions.resolve_bigip_credentials("192.0.2.1", "admin", "secret_cli")
+        self.assertEqual(pw, "secret_cli")
+
+    @patch.dict(os.environ, {"BIGIP_PASSWORD": "secret_from_env"})
+    def test_resolve_bigip_credentials_env(self):
+        """Verify resolve_bigip_credentials reads BIGIP_PASSWORD environment variable."""
+        pw = f5functions.resolve_bigip_credentials("192.0.2.1", "admin")
+        self.assertEqual(pw, "secret_from_env")
+
+    @patch('sys.stdin.isatty', return_value=True)
+    @patch('getpass.getpass', return_value="secret_interactive")
+    def test_resolve_bigip_credentials_interactive(self, mock_getpass, mock_isatty):
+        """Verify resolve_bigip_credentials prompts interactively via getpass."""
+        with patch.dict(os.environ, {}, clear=True):
+            pw = f5functions.resolve_bigip_credentials("192.0.2.1", "admin")
+            self.assertEqual(pw, "secret_interactive")
+            mock_getpass.assert_called_once()
+
+    def test_resolve_ihealth_credentials_cli(self):
+        """Verify resolve_ihealth_credentials returns arguments when provided via CLI."""
+        cid, csec = f5functions.resolve_ihealth_credentials("cli_id", "cli_sec")
+        self.assertEqual(cid, "cli_id")
+        self.assertEqual(csec, "cli_sec")
+
+    @patch.dict(os.environ, {"F5_CLIENT_ID": "env_id", "F5_CLIENT_SECRET": "env_sec"})
+    def test_resolve_ihealth_credentials_env(self):
+        """Verify resolve_ihealth_credentials reads F5_CLIENT_ID and F5_CLIENT_SECRET."""
+        cid, csec = f5functions.resolve_ihealth_credentials()
+        self.assertEqual(cid, "env_id")
+        self.assertEqual(csec, "env_sec")
+
+    @patch('os.path.isfile', side_effect=lambda p: p.endswith('.ihealth_credentials'))
+    def test_resolve_ihealth_credentials_file(self, mock_isfile):
+        """Verify resolve_ihealth_credentials parses ~/.ihealth_credentials file."""
+        mock_ini = "[g.robinson@f5.com]\nclientid = file_id\nclientsecret = file_sec\n"
+        with patch.dict(os.environ, {}, clear=True):
+            with patch('builtins.open', mock_open(read_data=mock_ini)):
+                cid, csec = f5functions.resolve_ihealth_credentials()
+                self.assertEqual(cid, "file_id")
+                self.assertEqual(csec, "file_sec")
+
+    # ---------------------------------------------------------------------------
     # Auth helper
     # ---------------------------------------------------------------------------
+
 
     @patch('f5functions.myf5_retrieve_access_token')
     def test_myf5_authenticate_success(self, mock_token):

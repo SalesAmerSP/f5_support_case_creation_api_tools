@@ -8,9 +8,12 @@ This module provides reusable utilities for interacting with:
 """
 
 import argparse
+import configparser
+import getpass
 import logging
 import os
 import ssl
+import sys
 import uuid
 import certifi
 import requests
@@ -50,12 +53,13 @@ IDENTITY_API_FQDN = OKTA_IDENTITY_FQDN
 
 # API Endpoints
 MYF5_API_FQDN = 'support.apis.f5.com'
-MYF5_API_K_VALUE = 'UKKD3Vxv7NHrM3QmYk8Fk2mZnLtljAKX'
+MYF5_API_K_VALUE = os.getenv('F5_MYF5_API_K_VALUE', 'UKKD3Vxv7NHrM3QmYk8Fk2mZnLtljAKX')
 
 IHEALTH_API_FQDN = 'ihealth2-api.f5.com'
 IHEALTH_FALLBACK_API_FQDN = 'ihealth-api.f5.com'
 
 logger = logging.getLogger(__name__)
+
 
 
 # ---------------------------------------------------------------------------
@@ -205,6 +209,106 @@ class MultipartProgressStream:
 # Shared argument parsers
 # ---------------------------------------------------------------------------
 
+def resolve_bigip_credentials(host, username, password=None):
+    """Resolve BIG-IP credentials safely from CLI, environment, or interactive prompt.
+
+    Args:
+        host (str): BIG-IP hostname or IP address.
+        username (str): Username.
+        password (str, optional): Password passed via CLI.
+
+    Returns:
+        str: BIG-IP password.
+    """
+    if password:
+        logger.warning(
+            "Passing secrets via CLI arguments exposes them in process listings (ps) "
+            "and shell history. Use BIGIP_PASSWORD environment variable or interactive entry instead."
+        )
+        return password
+
+    env_pw = os.getenv('BIGIP_PASSWORD') or os.getenv('F5_PASSWORD')
+    if env_pw:
+        return env_pw
+
+    if sys.stdin.isatty():
+        prompt_str = f"Enter BIG-IP password for {username}@{host}: "
+        entered = getpass.getpass(prompt_str).strip()
+        if entered:
+            return entered
+
+    logger.error("BIG-IP password must be provided via BIGIP_PASSWORD environment variable or interactive prompt.")
+    sys.exit(1)
+
+
+def resolve_ihealth_credentials(client_id=None, client_secret=None, profile=None):
+    """Resolve F5 / iHealth API credentials safely from CLI, environment, ~/.ihealth_credentials, or interactive prompt.
+
+    Args:
+        client_id (str, optional): Client ID from CLI.
+        client_secret (str, optional): Client Secret from CLI.
+        profile (str, optional): Profile name in ~/.ihealth_credentials.
+
+    Returns:
+        tuple[str, str]: (client_id, client_secret)
+    """
+    if client_id and client_secret:
+        logger.warning(
+            "Passing secrets via CLI arguments exposes them in process listings (ps) "
+            "and shell history. Use environment variables (F5_CLIENT_ID, F5_CLIENT_SECRET), "
+            "~/.ihealth_credentials, or interactive entry instead."
+        )
+        return client_id, client_secret
+
+    env_id = client_id or os.getenv('F5_CLIENT_ID') or os.getenv('IHEALTH_CLIENT_ID')
+    env_secret = client_secret or os.getenv('F5_CLIENT_SECRET') or os.getenv('IHEALTH_CLIENT_SECRET')
+
+    for cred_path in [os.path.expanduser('~/.ihealth_credentials'), os.path.expanduser('~/.f5_credentials')]:
+        if os.path.isfile(cred_path):
+            try:
+                cfg = configparser.ConfigParser()
+                cfg.read(cred_path)
+                target_section = None
+                if profile and cfg.has_section(profile):
+                    target_section = profile
+                elif 'default' in cfg.sections():
+                    target_section = 'default'
+                elif cfg.sections():
+                    target_section = cfg.sections()[0]
+
+                if target_section:
+                    sec = cfg[target_section]
+                    if not env_id:
+                        for k in ['clientid', 'client_id', 'client-id', 'id']:
+                            if k in sec:
+                                env_id = sec[k].strip()
+                                break
+                    if not env_secret:
+                        for k in ['clientsecret', 'client_secret', 'client-secret', 'secret']:
+                            if k in sec:
+                                env_secret = sec[k].strip()
+                                break
+            except Exception as e:
+                logger.debug("Failed to parse credentials file %s: %s", cred_path, e)
+
+    if env_id and env_secret:
+        return env_id, env_secret
+
+    if sys.stdin.isatty():
+        if not env_id:
+            env_id = input("Enter F5 API Client ID: ").strip()
+        if not env_secret:
+            env_secret = getpass.getpass("Enter F5 API Client Secret: ").strip()
+        if env_id and env_secret:
+            return env_id, env_secret
+
+    logger.error(
+        "F5 API Client ID and Secret must be provided via environment variables "
+        "(F5_CLIENT_ID, F5_CLIENT_SECRET), ~/.ihealth_credentials, or interactive prompt."
+    )
+    sys.exit(1)
+
+
 def _bigip_base_parser():
     """Create the base argument parser for BIG-IP CLI commands.
 
@@ -214,7 +318,7 @@ def _bigip_base_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, help="BIG-IP hostname or IP address", required=True)
     parser.add_argument("--username", type=str, help="BIG-IP username (default: admin)", required=False, default="admin")
-    parser.add_argument("--password", type=str, help="BIG-IP password", required=True)
+    parser.add_argument("--password", type=str, help="BIG-IP password (optional; can be set via BIGIP_PASSWORD env var or prompt)", required=False, default=None)
     parser.add_argument("--no-ssl-verify", action="store_true", help="Disable SSL certificate verification for BIG-IP", default=False)
     return parser
 
@@ -231,7 +335,9 @@ def bigip_args(*extra_args):
     parser = _bigip_base_parser()
     for arg_args, arg_kwargs in extra_args:
         parser.add_argument(*arg_args, **arg_kwargs)
-    return parser.parse_args()
+    parsed = parser.parse_args()
+    parsed.password = resolve_bigip_credentials(parsed.host, parsed.username, parsed.password)
+    return parsed
 
 
 def _ihealth_base_parser():
@@ -241,8 +347,9 @@ def _ihealth_base_parser():
         argparse.ArgumentParser: Parser configured with iHealth options.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('--client-id', help='Support API Key / Client ID', required=True)
-    parser.add_argument('--client-secret', help='Support API Secret / Client Secret', required=True)
+    parser.add_argument('--client-id', help='Support API Key / Client ID (optional; resolves from env or ~/.ihealth_credentials)', required=False, default=None)
+    parser.add_argument('--client-secret', help='Support API Secret / Client Secret (optional; resolves from env or ~/.ihealth_credentials)', required=False, default=None)
+    parser.add_argument('--profile', help='Profile/section name in ~/.ihealth_credentials', required=False, default=None)
     parser.add_argument('--app-id', help='Support App ID (default: outp95ykc80HOU7SQ357)', required=False, default=IHEALTH_APP_ID)
     parser.add_argument('--auth-url', help='Direct OAuth2 token URL override', required=False, default=None)
     parser.add_argument('--auth-fqdn', help=f'Identity Provider FQDN (default: {IDENTITY_API_FQDN})', required=False, default=IDENTITY_API_FQDN)
@@ -262,7 +369,11 @@ def ihealth_args(*extra_args):
     parser = _ihealth_base_parser()
     for arg_args, arg_kwargs in extra_args:
         parser.add_argument(*arg_args, **arg_kwargs)
-    return parser.parse_args()
+    parsed = parser.parse_args()
+    cid, csec = resolve_ihealth_credentials(parsed.client_id, parsed.client_secret, getattr(parsed, 'profile', None))
+    parsed.client_id = cid
+    parsed.client_secret = csec
+    return parsed
 
 
 def _myf5_base_parser():
@@ -272,8 +383,9 @@ def _myf5_base_parser():
         argparse.ArgumentParser: Parser configured with MyF5 options.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('--client-id', help='Support API Key / Client ID', required=True)
-    parser.add_argument('--client-secret', help='Support API Secret / Client Secret', required=True)
+    parser.add_argument('--client-id', help='Support API Key / Client ID (optional; resolves from env or ~/.ihealth_credentials)', required=False, default=None)
+    parser.add_argument('--client-secret', help='Support API Secret / Client Secret (optional; resolves from env or ~/.ihealth_credentials)', required=False, default=None)
+    parser.add_argument('--profile', help='Profile/section name in ~/.ihealth_credentials', required=False, default=None)
     parser.add_argument('--app-id', type=str, help='Support App ID (default: aus19gt5bu0jGw9Fi358)', required=False, default=MYF5_APP_ID)
     parser.add_argument('--auth-url', help='Direct OAuth2 token URL override', required=False, default=None)
     parser.add_argument('--auth-fqdn', help=f'Identity Provider FQDN (default: {IDENTITY_API_FQDN})', required=False, default=IDENTITY_API_FQDN)
@@ -294,7 +406,12 @@ def myf5_args(*extra_args):
     parser = _myf5_base_parser()
     for arg_args, arg_kwargs in extra_args:
         parser.add_argument(*arg_args, **arg_kwargs)
-    return parser.parse_args()
+    parsed = parser.parse_args()
+    cid, csec = resolve_ihealth_credentials(parsed.client_id, parsed.client_secret, getattr(parsed, 'profile', None))
+    parsed.client_id = cid
+    parsed.client_secret = csec
+    return parsed
+
 
 
 # ---------------------------------------------------------------------------
