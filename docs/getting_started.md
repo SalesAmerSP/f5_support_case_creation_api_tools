@@ -11,7 +11,10 @@ This guide walks you through installing and configuring `qkviewmgr` and verifyin
 - **OpenSSL**: Version 1.1.1 or higher (OpenSSL 3.0+ recommended for TLS 1.3 support).
 
 > [!TIP]
-> If you do not have Python installed on your target machine, see the [Standalone Binary Packaging Guide](binary_packaging.md) to download or build a pre-compiled, self-contained executable that requires zero runtime dependencies.
+> If you do not have Python installed on your target machine, see the [Container Deployment Guide](container.md) to run the tool via Docker or Podman with zero local dependencies:
+> ```bash
+> docker run --rm -it -v $(pwd):/data ghcr.io/salesamersp/f5_support_case_creation_api_tools:latest run --help
+> ```
 
 ---
 

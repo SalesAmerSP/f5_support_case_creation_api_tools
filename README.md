@@ -4,9 +4,9 @@
 [![CodeQL Analysis](https://github.com/SalesAmerSP/f5_support_case_creation_api_tools/actions/workflows/codeql.yml/badge.svg)](https://github.com/SalesAmerSP/f5_support_case_creation_api_tools/actions/workflows/codeql.yml)
 [![Secret & Credential Leak Scan](https://github.com/SalesAmerSP/f5_support_case_creation_api_tools/actions/workflows/secret-scan.yml/badge.svg)](https://github.com/SalesAmerSP/f5_support_case_creation_api_tools/actions/workflows/secret-scan.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue.svg)](https://www.python.org/)
-[![Standalone Binary](https://img.shields.io/badge/packaging-PyInstaller%20Standalone-orange.svg)](docs/binary_packaging.md)
+[![OCI Container Image](https://img.shields.io/badge/container-ghcr.io-blue.svg)](docs/container.md)
 
-Generates proactive and reactive support cases using MyF5 and iHealth; includes automated BIG-IP QKView generation, chunked retrieval, remote disk purge, TLS 1.3 iHealth upload, native desktop GUI, interactive terminal wizard, and standalone binary distribution.
+Generates proactive and reactive support cases using MyF5 and iHealth; includes automated BIG-IP QKView generation, chunked retrieval, remote disk purge, TLS 1.3 iHealth upload, native desktop GUI, interactive terminal wizard, and hardened multi-architecture OCI container images.
 
 ---
 
@@ -33,7 +33,7 @@ This toolset automates the complete lifecycle of opening F5 support cases and ma
       - Remote disk purge
 ```
 
-Compatible with **Python 3.10 through 3.14**, as well as pre-compiled standalone executables requiring **zero** runtime dependencies.
+Compatible with **Python 3.10 through 3.14**, as well as pre-built **Docker & Podman multi-arch container images** requiring **zero** local runtime dependencies.
 
 ---
 
@@ -47,7 +47,7 @@ Detailed guides are organized by topic in the [`docs/`](docs/) directory:
 | **Credentials & Auth** | [Credentials & Secret Management](docs/credentials.md) | Zero-secret CLI rules, interactive masked prompts, environment variables, and `~/.ihealth_credentials`. |
 | **CLI Reference** | [Primary CLI Orchestrator (`qkviewmgr`)](docs/cli.md) | `run` (Auto-Pilot), `doctor`, and modular `bigip`, `ihealth`, and `case` subcommands. |
 | **Graphical & Wizard UIs** | [GUI & Terminal Wizard Guide](docs/gui_and_wizard.md) | Native desktop GUI (strictly NO web services) and interactive terminal wizard. |
-| **Standalone Packaging** | [Standalone Binary Packaging](docs/binary_packaging.md) | PyInstaller compilation, cross-platform release matrix, SBOM, and SLSA Level 3 attestations. |
+| **Container Deployment** | [Container Deployment Guide (Docker / Podman)](docs/container.md) | Multi-arch OCI image, GHCR registry, volume mounting, and unprivileged non-root security. |
 | **Security & Supply Chain** | [Security & Supply Chain Posture](docs/security_and_ghas.md) | GitHub Advanced Security (GHAS), CodeQL AST analysis, hash pinning, pip-audit, and secret scanning. |
 | **Network & Firewall** | [Network Egress & Firewall Guidelines](docs/network_and_firewall.md) | F5 Articles K15202 & K000162308, port 443 egress rules, TLS 1.2+ configuration, and ciphers. |
 | **Developer Scripts** | [Individual Developer Scripts Reference](examples/README.md) | 14 standalone modular scripts under `examples/` for custom integrations and workflows. |
@@ -62,6 +62,12 @@ Detailed guides are organized by topic in the [`docs/`](docs/) directory:
 git clone https://github.com/SalesAmerSP/f5_support_case_creation_api_tools.git
 cd f5_support_case_creation_api_tools
 pip install -e .
+```
+
+*Or run with **zero** local Python dependencies via Docker / Podman:*
+```bash
+docker pull ghcr.io/salesamersp/f5_support_case_creation_api_tools:latest
+docker run --rm -it -v $(pwd):/data ghcr.io/salesamersp/f5_support_case_creation_api_tools:latest doctor
 ```
 
 ### 2. Configure Credentials
@@ -104,7 +110,7 @@ f5_support_case_creation_api_tools/
 │   ├── credentials.md        # Credential handling & zero-secret security
 │   ├── cli.md                # Full CLI command and options reference
 │   ├── gui_and_wizard.md     # Desktop GUI and terminal wizard
-│   ├── binary_packaging.md   # Standalone executable compilation
+│   ├── container.md          # Docker & Podman containerized deployment
 │   ├── security_and_ghas.md  # GitHub Advanced Security & supply chain
 │   └── network_and_firewall.md # F5 K15202/K000162308 network egress
 ├── examples/                 # Standalone developer scripts for custom workflows
@@ -113,10 +119,16 @@ f5_support_case_creation_api_tools/
 │   ├── ihealth_*.py          # Standalone iHealth utilities
 │   └── myf5_*.py             # Standalone MyF5 case utilities
 ├── python/                   # Backward-compatibility shims for legacy invocations
-├── scripts/                  # Build & packaging automation (PyInstaller)
 ├── tests/                    # Comprehensive unit tests (48/48 passing)
-├── .github/                  # CI/CD, GHAS CodeQL, Dependabot, Releases
-├── qkviewmgr.spec            # Standalone binary compilation spec
+├── .github/                  # CI/CD, GHAS CodeQL, Dependabot, Container workflows
+│   └── workflows/
+│       ├── container.yml     # Multi-arch Docker build & push to GHCR
+│       ├── codeql.yml        # CodeQL static analysis
+│       ├── security-audit.yml# Hash-pinned verification & pip-audit
+│       ├── secret-scan.yml   # Gitleaks secret detection
+│       └── dependency-review.yml # PR dependency review
+├── Dockerfile                # Hardened unprivileged multi-arch container spec
+├── .dockerignore             # Container build exclusion list
 ├── requirements.lock         # Cryptographically hash-pinned dependencies
 ├── requirements.txt          # Root dependency pointer
 └── pyproject.toml            # Project packaging specification
