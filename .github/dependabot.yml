@@ -1,0 +1,35 @@
+version: 2
+updates:
+  # Monitor production and development Python dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "grobf5"
+    labels:
+      - "dependencies"
+      - "security"
+      - "supply-chain"
+    commit-message:
+      prefix: "build(deps)"
+      include: "scope"
+
+  # Monitor GitHub Actions workflow actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    labels:
+      - "ci"
+      - "security"
+    commit-message:
+      prefix: "ci(actions)"
