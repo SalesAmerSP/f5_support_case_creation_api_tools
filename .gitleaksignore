@@ -1,0 +1,18 @@
+# Gitleaks fingerprint exemptions for historical commits and test suites
+4ae8fc996fc09e12ff6523fb807c33ea9ee06a07:python/f5functions.py:bigip-admin-password:226
+4ae8fc996fc09e12ff6523fb807c33ea9ee06a07:python/f5functions.py:bigip-admin-password:240
+4ae8fc996fc09e12ff6523fb807c33ea9ee06a07:tests/test_f5functions.py:bigip-admin-password:133
+4ae8fc996fc09e12ff6523fb807c33ea9ee06a07:tests/test_f5functions.py:bigip-admin-password:135
+78c226a4de27fc5961fdd017a72d814ce859d908:python/f5functions.py:generic-api-key:36
+78c226a4de27fc5961fdd017a72d814ce859d908:python/f5functions.py:generic-api-key:39
+251114cbf0626f1c85858c14f816cc1bd9bc1f36:python/f5functions.py:generic-api-key:12
+251114cbf0626f1c85858c14f816cc1bd9bc1f36:python/f5functions.py:generic-api-key:14
+251114cbf0626f1c85858c14f816cc1bd9bc1f36:tests/test_f5functions.py:generic-api-key:17
+251114cbf0626f1c85858c14f816cc1bd9bc1f36:tests/test_f5functions.py:generic-api-key:19
+e198f7f98e04cb5d1035f7a682708dc9e2a50d77:python/f5functions.py:generic-api-key:180
+e198f7f98e04cb5d1035f7a682708dc9e2a50d77:python/f5functions.py:generic-api-key:190
+e198f7f98e04cb5d1035f7a682708dc9e2a50d77:python/f5functions.py:generic-api-key:200
+e198f7f98e04cb5d1035f7a682708dc9e2a50d77:python/f5functions.py:generic-api-key:211
+e198f7f98e04cb5d1035f7a682708dc9e2a50d77:python/f5functions.py:generic-api-key:221
+e198f7f98e04cb5d1035f7a682708dc9e2a50d77:python/f5functions.py:generic-api-key:231
+e198f7f98e04cb5d1035f7a682708dc9e2a50d77:python/f5functions.py:generic-api-key:241

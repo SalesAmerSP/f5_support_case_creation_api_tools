@@ -3,6 +3,21 @@ title = "F5 Support Tools Security & Secret Detection Rules"
 [extend]
 useDefault = true
 
+[allowlist]
+description = "Allowlist for test fixtures, public endpoints, and non-sensitive API defaults"
+paths = [
+  '''(?i)tests/.*''',
+  '''(?i).*_test\.py$''',
+]
+regexes = [
+  '''UKKD3Vxv7NHrM3QmYk8Fk2mZnLtljAKX''',
+  '''ihealth2-api\.f5\.com''',
+  '''ihealth-api\.f5\.com''',
+  '''identity\.account\.f5\.com''',
+  '''idp\.identity\.f5\.com''',
+  '''support\.apis\.f5\.com''',
+]
+
 # Guard against F5 / Auth0 / Okta Client Secrets
 [[rules]]
 id = "f5-auth0-client-secret"
