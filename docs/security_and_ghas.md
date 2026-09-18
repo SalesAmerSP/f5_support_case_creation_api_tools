@@ -76,3 +76,17 @@ Configured in [`.github/dependabot.yml`](../.github/dependabot.yml):
 Configured in [`.github/workflows/dependency-review.yml`](../.github/workflows/dependency-review.yml):
 - Evaluates newly added dependencies on every incoming pull request.
 - Blocks pull requests that introduce packages with known CVEs or restrictive licenses.
+
+---
+
+## 7. Protected `main` Branch Policy
+
+The `main` branch is protected against accidental overwrites, unvetted code, and supply chain regressions:
+- **Mandatory Pull Requests**: Changes to `main` must be submitted via pull request with conversation resolution required.
+- **Required CI Status Checks**: Merging requires 100% passing results from:
+  - `CodeQL Code Scanning (python)` (Static AST security analysis)
+  - `Secret & Credential Leak Scan` (Gitleaks token and key detection)
+  - `Verify Hash-Pinned Lockfile Integrity` (Cryptographic dependency verification)
+  - `Dependency Vulnerability Audit (pip-audit)` (CVE checking)
+- **Destructive Operation Blocking**: Force pushes (`git push --force`) and branch deletions are strictly disabled.
+- **Emergency Administrative Override**: Repository administrators can bypass when necessary for emergency hotfixes or automated releases.
