@@ -1,258 +1,291 @@
-# F5 Support Case Creation & Automation API Tools
+# F5 Support Case Creation & QKView Automation Toolset (`qkviewmgr`)
 
-Generates proactive and reactive support cases using MyF5 and iHealth; includes automated BIG-IP QKView generation, chunked retrieval, deletion, and upload to iHealth.
+Generates proactive and reactive support cases using MyF5 and iHealth; includes automated BIG-IP QKView generation, chunked retrieval, remote disk purge, TLS 1.3 iHealth upload, native desktop GUI, interactive terminal wizard, and standalone binary distribution.
 
 ---
 
 ## Table of Contents
 
-- [Overview](#overview)
-- [Support Disclaimer](#support-disclaimer)
-- [Prerequisites & Network Requirements](#prerequisites--network-requirements)
-  - [API Credentials](#api-credentials)
-  - [Firewall & Egress Guidelines (K15202 & K000162308)](#firewall--egress-guidelines-k15202--k000162308)
-- [Installation & Environment Setup](#installation--environment-setup)
-- [Toolset Reference](#toolset-reference)
+- [Overview & Architecture](#overview--architecture)
+- [Zero-Secret Credential Security](#zero-secret-credential-security)
+- [Primary Orchestrator: `qkviewmgr`](#primary-orchestrator-qkviewmgr)
+  - [1. One-Touch Auto-Pilot (`qkviewmgr run`)](#1-one-touch-auto-pilot-qkviewmgr-run)
+  - [2. System Doctor Pre-flight Check (`qkviewmgr doctor`)](#2-system-doctor-pre-flight-check-qkviewmgr-doctor)
+  - [3. Native Desktop GUI (`qkviewmgr gui`)](#3-native-desktop-gui-qkviewmgr-gui)
+  - [4. Interactive Terminal Wizard (`qkviewmgr wizard`)](#4-interactive-terminal-wizard-qkviewmgr-wizard)
+  - [5. Modular Subcommands (`bigip`, `ihealth`, `case`)](#5-modular-subcommands-bigip-ihealth-case)
+- [Standalone Binary Packaging (PyInstaller)](#standalone-binary-packaging-pyinstaller)
+- [Individual Developer Scripts Reference](#individual-developer-scripts-reference)
   - [BIG-IP Tools](#big-ip-tools)
   - [iHealth Tools](#ihealth-tools)
   - [MyF5 Tools](#myf5-tools)
-- [Workflow & Usage Guide](#workflow--usage-guide)
+- [Installation & Quick Start](#installation--quick-start)
+- [Security & Supply Chain Posture (GHAS)](#security--supply-chain-posture-ghas)
+- [Firewall & Egress Guidelines (K15202 & K000162308)](#firewall--egress-guidelines-k15202--k000162308)
 - [Running Automated Tests](#running-automated-tests)
+- [Support Disclaimer](#support-disclaimer)
 
 ---
 
-## Overview
+## Overview & Architecture
 
-This toolset automates the complete lifecycle of opening F5 support cases:
-1. **Verify Connectivity**: Validate access to BIG-IP devices, iHealth, and MyF5 APIs.
-2. **Collect Diagnostics**: Generate full or standard QKViews on BIG-IP devices via iControl REST, stream them locally, and clean up remote disk space.
-3. **Upload to iHealth**: Securely upload QKViews to F5 iHealth for automated analysis and case linking.
-4. **Create & Manage Cases**: Fetch dynamic schema metadata, prepare validated JSON case payloads, submit new support tickets to MyF5, and append comments or updates.
+This toolset automates the complete lifecycle of opening F5 support cases and managing QKView diagnostics:
 
-Compatible with **Python 3.10, 3.11, 3.12, 3.13, and 3.14**.
+```
++---------------------------------------------------------------------------------------+
+|                                    qkviewmgr CLI                                      |
+|                                                                                       |
+|   +-------------------+  +--------------------+  +----------------+  +------------+   |
+|   |  run / auto-pilot |  | native desktop gui |  | terminal wizard|  |   doctor   |   |
+|   +-------------------+  +--------------------+  +----------------+  +------------+   |
++-------------------------------------------+-------------------------------------------+
+                                            |
+                    +-----------------------+-----------------------+
+                    |                                               |
+         [BIG-IP Appliance]                                [F5 Cloud APIs]
+        (iControl REST API)                       (Auth0 IDP / MyF5 / iHealth)
+      - Connectivity test                      - TLS 1.3 Streaming QKView Upload
+      - Non-truncating QKView (-s0)            - Support Case Creation & Commenting
+      - Chunked download with progress         - Diagnostic Analysis Polling
+      - Remote disk purge
+```
+
+Compatible with **Python 3.10, 3.11, 3.12, 3.13, and 3.14**, as well as pre-compiled standalone executables requiring **zero** runtime dependencies.
+
+---
+
+## Zero-Secret Credential Security
+
+Passing passwords or API keys as command-line arguments is insecure because secrets appear in plain text in process listings (`ps aux`), process audit logs, and shell history (`.bash_history`, `.zsh_history`).
+
+`qkviewmgr` and all 14 standalone scripts support **Zero-Secret CLI Operations**:
+
+### 1. Interactive Masked Prompts
+If no secret is provided, the CLI will safely prompt for passwords using masked inputs (`getpass`):
+```bash
+qkviewmgr bigip test --host 18.210.113.51 --username admin
+# Prompts: Password for admin@18.210.113.51: [hidden]
+```
+
+### 2. Environment Variables
+You can configure credentials via standard environment variables:
+```bash
+export BIGIP_PASSWORD="YourAppliancePassword"
+export F5_CLIENT_ID="YourF5SupportAPIClientID"
+export F5_CLIENT_SECRET="YourF5SupportAPIClientSecret"
+```
+
+### 3. Credential Profile File (`~/.ihealth_credentials`)
+Store API credentials in `~/.ihealth_credentials` (mode `0600`):
+```ini
+[default]
+clientid = JyLTjnHsBhGhm8eykbyJUmTcVy4fllbU
+clientsecret = O2QL0nVXodOo9lQTkXjUWNW-zq6Wa-uULjTHAacCqwAJFQGtc2Zwq_3JOlASKC8Z
+```
+
+> [!IMPORTANT]
+> If a user passes `--password`, `--client-id`, or `--client-secret` via command-line arguments, a security warning is logged to remind them of process table leakage risks.
+
+---
+
+## Primary Orchestrator: `qkviewmgr`
+
+`qkviewmgr` is installed as a direct system console command when installing the package (`pip install -e .`), or executed via `python3 python/qkviewmgr.py`.
+
+### 1. One-Touch Auto-Pilot (`qkviewmgr run`)
+Executes the complete diagnostic pipeline in a single command:
+1. Tests BIG-IP reachability and authentication.
+2. Triggers QKView generation on appliance.
+3. Downloads the archive locally with a real-time progress bar.
+4. Purges the temporary QKView from appliance storage to free disk space.
+5. Authenticates to F5 Identity and streams the file to iHealth over TLS 1.3 with a progress meter.
+6. Polls iHealth until diagnostic processing completes, returning the iHealth web analysis URL.
+
+```bash
+# Basic run (password prompted interactively or read from BIGIP_PASSWORD)
+qkviewmgr run --host 18.210.113.51 --no-ssl-verify
+
+# Associate with an existing support ticket and complete full analysis tracking
+qkviewmgr run --host 18.210.113.51 --case-number C3456789 --description "Core crash investigation" --no-ssl-verify
+```
+
+### 2. System Doctor Pre-flight Check (`qkviewmgr doctor`)
+Verifies local Python runtime, OpenSSL version, TLS 1.2/1.3 ciphers, credential store status, and network reachability to all F5 Cloud endpoints:
+```bash
+qkviewmgr doctor
+```
+
+Output:
+```
+=================================================================
+          qkviewmgr System Doctor & Pre-flight Audit
+=================================================================
+
+1. Runtime Environment:
+   Python Executable: /opt/homebrew/bin/python3
+   Python Version   : 3.14.7
+   OpenSSL Version  : OpenSSL 3.6.4 25 Aug 2026
+
+2. Credential Configuration:
+   ✓ Found ~/.ihealth_credentials
+   ℹ F5_CLIENT_ID set in environment
+   ℹ BIGIP_PASSWORD set in environment
+
+3. TLS 1.2+ Network Endpoint Reachability:
+   ✓ F5 Identity (Legacy) (https://identity.account.f5.com): Reachable (HTTP 200)
+   ✓ F5 iHealth API (https://ihealth2-api.f5.com): Reachable (HTTP 401)
+   ✓ MyF5 Support API (https://support.apis.f5.com): Reachable (HTTP 404)
+=================================================================
+   ✓ All pre-flight diagnostic checks passed!
+=================================================================
+```
+
+### 3. Native Desktop GUI (`qkviewmgr gui`)
+Launches a native desktop window using Python's standard `tkinter`/`ttk` libraries.
+
+> [!TIP]
+> **Strictly NO Web Services**: The GUI binds zero HTTP/TCP listening ports, starts no background web servers, and requires no web browser. It is fully local, threaded, and secure.
+
+```bash
+qkviewmgr gui
+```
+Features:
+- **One-Touch Auto-Pilot Tab**: Fill in BIG-IP credentials, click "Run Auto-Pilot", and watch live streaming activity.
+- **BIG-IP Direct Tab**: Test appliance connectivity, generate, and list QKViews on BIG-IP.
+- **iHealth & Cases Tab**: List account QKViews and search open support tickets.
+- **System Doctor Tab**: Run one-click network and environment diagnostics.
+
+### 4. Interactive Terminal Wizard (`qkviewmgr wizard`)
+For SSH jump boxes, headless servers, and terminal users, launch the guided CLI wizard:
+```bash
+qkviewmgr wizard
+```
+
+### 5. Modular Subcommands (`bigip`, `ihealth`, `case`)
+```bash
+# BIG-IP Appliance Management
+qkviewmgr bigip test --host 18.210.113.51 --no-ssl-verify
+qkviewmgr bigip list --host 18.210.113.51 --no-ssl-verify
+qkviewmgr bigip generate --host 18.210.113.51 --filename prod_diag.qkview --no-truncate --no-ssl-verify
+qkviewmgr bigip download --host 18.210.113.51 --filename prod_diag.qkview --output ./prod_diag.qkview --no-ssl-verify
+qkviewmgr bigip delete --host 18.210.113.51 --filename prod_diag.qkview --no-ssl-verify
+
+# iHealth Management
+qkviewmgr ihealth list
+qkviewmgr ihealth show --qkview-id 26894783
+qkviewmgr ihealth upload --filename ./prod_diag.qkview --case-number C3456789
+
+# Support Case Management
+qkviewmgr case list
+qkviewmgr case metadata
+qkviewmgr case create --json-file case_inputs.json
+qkviewmgr case comment --case-number C3456789 --comment "Uploaded new QKView 26894783."
+```
+
+---
+
+## Standalone Binary Packaging (PyInstaller)
+
+Users and operators who do not have Python or necessary libraries installed can run `qkviewmgr` as a single standalone executable.
+
+### Local Binary Compilation
+```bash
+# Build standalone binary locally
+python3 scripts/build_binary.py
+```
+Compiled output is saved to `dist/qkviewmgr` (or `dist/qkviewmgr.exe` on Windows).
+
+### Multi-Platform Release Matrix & SLSA Attestations
+Our GitHub Actions release workflow (`.github/workflows/release.yml`) compiles cross-platform binaries on every release tag (`v*`):
+- `qkviewmgr-macos-arm64` (Apple Silicon macOS)
+- `qkviewmgr-linux-x86_64` (Standard 64-bit Linux)
+- `qkviewmgr-windows-x64.exe` (Windows 64-bit)
+- Software Bill of Materials (SBOM) in SPDX format
+- **SLSA Level 3 Build Provenance Attestations** signed cryptographically by GitHub.
+
+---
+
+## Individual Developer Scripts Reference
+
+All 14 individual standalone scripts are retained under `python/` for custom integrations, automation scripts, and workflows. All scripts inherit zero-secret credential resolution:
+
+### BIG-IP Tools
+- **`bigip_connectivity_test.py`**: Validate iControl REST reachability against `/mgmt/tm/sys/ready`.
+- **`bigip_generate_qkview.py`**: Trigger QKView generation on target BIG-IP (supports `-s0` non-truncate).
+- **`bigip_list_qkviews.py`**: List all completed QKView archives on the BIG-IP device.
+- **`bigip_download_qkview.py`**: Download remote QKView with live chunked progress meter.
+- **`bigip_delete_qkview.py`**: Free appliance disk space by deleting remote QKView.
+
+### iHealth Tools
+- **`ihealth_connectivity_test.py`**: Authenticate and validate access to iHealth analyzer API.
+- **`ihealth_list_qkviews.py`**: Fetch diagnostic summaries, processing status, and URLs for all uploaded QKViews.
+- **`ihealth_upload_qkview.py`**: Upload local QKView file to iHealth with real-time transfer progress meter.
+
+### MyF5 Tools
+- **`myf5_connectivity_test.py`**: Validate authentication credentials against F5 Identity Services.
+- **`myf5_retrieve_case_creation_metadata.py`**: Retrieve valid product families, severities, and schemas.
+- **`myf5_create_inputs_file.py`**: Interactive wizard generating valid case JSON payload files.
+- **`myf5_create_new_case.py`**: Submit case payload to MyF5 and retrieve created case number.
+- **`myf5_list_existing_cases.py`**: List active or closed support cases.
+- **`myf5_add_comments_to_existing_case.py`**: Append notes or updates to an open support case.
+
+---
+
+## Installation & Quick Start
+
+### 1. Clone & Set Up Environment
+```bash
+git clone https://github.com/SalesAmerSP/f5_support_case_creation_api_tools.git
+cd f5_support_case_creation_api_tools
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### 2. Install Dependencies
+```bash
+# Standard install:
+pip install -e .
+
+# Or strict hash-pinned production install:
+pip install --require-hashes --no-deps -r requirements.lock
+```
+
+---
+
+## Security & Supply Chain Posture (GHAS)
+
+This repository implements enterprise-grade GitHub Advanced Security (GHAS) controls:
+
+1. **Semantic CodeQL Analysis (`.github/workflows/codeql.yml`)**: Continuous Abstract Syntax Tree (AST) scanning with `security-extended` and `security-and-quality` rules.
+2. **Cryptographic Lockfile Pinning (`requirements.lock`)**: All production dependencies pinned with multi-architecture SHA-256 hashes against supply chain tampering.
+3. **Automated Vulnerability Audits (`.github/workflows/security-audit.yml`)**: Continuous scanning with `pip-audit` exporting SARIF alerts to GitHub Code Scanning.
+4. **Secret Leak Prevention (`.github/workflows/secret-scan.yml` & `.gitleaks.toml`)**: Automated secret scanning preventing accidental token or password commits.
+5. **PR Dependency Review (`.github/workflows/dependency-review.yml`)**: Automatic blocking of pull requests introducing vulnerable or non-compliant dependencies.
+6. **Automated Dependabot Security Updates (`.github/dependabot.yml`)**: Weekly automated dependency bump PRs.
+
+---
+
+## Firewall & Egress Guidelines (K15202 & K000162308)
+
+Per **F5 Article K15202** (*IP addresses for F5 hosted services*) and **K000162308** (*F5 Identity Platform Migration: Okta to Auth0*):
+
+- **F5 Identity Service (Auth0)**: `idp.identity.f5.com`
+- **F5 Identity Service (Legacy Okta)**: `identity.account.f5.com`
+- **Case Management API**: `support.apis.f5.com` (`35.199.173.84`)
+- **iHealth Upload API**: `ihealth2-api.f5.com` and `ihealth-api.f5.com` (`185.56.152.6`)
+
+---
+
+## Running Automated Tests
+
+Run the complete 44-test unit test suite:
+```bash
+python3 -m unittest discover -s tests -v
+```
 
 ---
 
 ## Support Disclaimer
 
 > [!CAUTION]
-> This is a community automation tool and is **not** an official F5 product. Support is not provided by F5 Technical Support. Usage is at your own risk. Please report bugs or submit enhancements via [GitHub Issues](https://github.com/f5devcentral/myf5_proactive_case_generation/issues). The MyF5 API, iHealth API, and iControl REST endpoints are subject to change.
-
----
-
-## Prerequisites & Network Requirements
-
-### API Credentials
-
-- **MyF5 Client ID & Secret**: Generated from your MyF5 account profile.
-- **iHealth Client ID & Secret**: Generated from [iHealth](https://ihealth.f5.com) Settings under API Tokens.
-- **BIG-IP Credentials**: Administrative username and password with access to iControl REST.
-- **Device Information**: Valid hostname/IP, TMOS version, and a serial number covered under an active F5 service contract.
-
-### Firewall & Egress Guidelines (K15202 & K000162308)
-
-Per **F5 Knowledge Base Article K15202** (*IP addresses for F5 hosted services*) and **K000162308** (*F5 Identity Platform Migration: Okta to Auth0*):
-
-- **Authentication Endpoints**:
-  - **Auth0 IDP** (Modern): `idp.identity.f5.com`
-    - Primary Egress IPs: `34.223.200.228`, `44.253.79.202`, `35.83.64.18`, `44.254.167.76`
-    - Failover Egress IPs: `100.30.52.61`, `98.95.15.62`, `44.214.121.49`, `98.89.114.213`, `54.211.123.113`
-  - **Okta IDP** (Legacy): `identity.account.f5.com`
-    - Egress IPs: `13.35.121.0/24`, `18.66.248.0/24`, `198.2.128.0/18`
-- **Case Management API**: `support.apis.f5.com` (`35.199.173.84`)
-- **iHealth Upload API**: `ihealth2-api.f5.com` and `ihealth-api.f5.com` (`185.56.152.6`)
-
-> [!NOTE]
-> All CLI scripts support the `--auth-fqdn` and `--auth-url` options. By default, legacy authentication uses `identity.account.f5.com`. For accounts migrated to Auth0, pass `--auth-fqdn idp.identity.f5.com`.
-
----
-
-## Installation & Environment Setup
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/f5devcentral/myf5_proactive_case_generation.git
-cd myf5_support_case_creation_api_tools
-```
-
-### 2. Create and Activate a Virtual Environment
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-### 3. Install Dependencies
-Install dependencies directly from `requirements.txt` or via standard editable package install:
-```bash
-pip install -r python/requirements.txt
-# Or editable package install:
-pip install -e .
-```
-
----
-
-## Toolset Reference
-
-### BIG-IP Tools
-
-All BIG-IP tools accept the `--no-ssl-verify` flag to disable TLS certificate verification when connecting to devices using internal or self-signed certificates.
-
-- **`bigip_connectivity_test.py`**  
-  Checks device availability and tests iControl REST reachability against `/mgmt/tm/sys/ready`.
-  ```bash
-  python3 python/bigip_connectivity_test.py --host 192.0.2.1 --username admin --password secret [--no-ssl-verify]
-  ```
-
-- **`bigip_generate_qkview.py`**  
-  Triggers generation of a QKView archive on the target BIG-IP (`/shared/tmp/qkviews`).
-  ```bash
-  python3 python/bigip_generate_qkview.py --host 192.0.2.1 --username admin --password secret \
-      --filename my_device.qkview [--skip-wait] [--wait-interval 60] [--no-ssl-verify]
-  ```
-
-- **`bigip_list_qkviews.py`**  
-  Lists all completed QKView archives present on the BIG-IP device.
-  ```bash
-  python3 python/bigip_list_qkviews.py --host 192.0.2.1 --username admin --password secret [--no-ssl-verify]
-  ```
-
-- **`bigip_download_qkview.py`**  
-  Downloads a remote QKView to the local filesystem using chunked streaming with a progress bar.
-  ```bash
-  python3 python/bigip_download_qkview.py --host 192.0.2.1 --username admin --password secret \
-      --filename my_device.qkview [--no-ssl-verify]
-  ```
-
-- **`bigip_delete_qkview.py`**  
-  Removes a generated QKView from the BIG-IP to free disk space.
-  ```bash
-  python3 python/bigip_delete_qkview.py --host 192.0.2.1 --username admin --password secret \
-      --filename my_device.qkview [--no-ssl-verify]
-  ```
-
----
-
-### iHealth Tools
-
-- **`ihealth_connectivity_test.py`**  
-  Authenticates with F5 Identity Services and validates access to the iHealth analyzer API.
-  ```bash
-  python3 python/ihealth_connectivity_test.py --client-id <id> --client-secret <secret> \
-      [--auth-fqdn idp.identity.f5.com] [--api-fqdn ihealth2-api.f5.com]
-  ```
-
-- **`ihealth_list_qkviews.py`**  
-  Displays diagnostic summaries and web URLs for all QKViews uploaded under the account.
-  ```bash
-  python3 python/ihealth_list_qkviews.py --client-id <id> --client-secret <secret>
-  ```
-
-- **`ihealth_upload_qkview.py`**  
-  Uploads a local QKView file to iHealth. Supports automatic endpoint fallback and case linking.
-  ```bash
-  python3 python/ihealth_upload_qkview.py --client-id <id> --client-secret <secret> \
-      --filename my_device.qkview [--support-case C1234567]
-  ```
-
----
-
-### MyF5 Tools
-
-- **`myf5_connectivity_test.py`**  
-  Validates authentication credentials against F5 Identity Services (`myf5_scope`).
-  ```bash
-  python3 python/myf5_connectivity_test.py --client-id <id> --client-secret <secret> \
-      [--auth-fqdn idp.identity.f5.com]
-  ```
-
-- **`myf5_retrieve_case_creation_metadata.py`**  
-  Retrieves valid product families, versions, severities, and contact methods from MyF5.
-  ```bash
-  python3 python/myf5_retrieve_case_creation_metadata.py --client-id <id> --client-secret <secret> \
-      --output-file metadata.json [--output-to-stdout]
-  ```
-
-- **`myf5_create_inputs_file.py`**  
-  Interactive wizard that queries the MyF5 metadata schema to guide creation of a valid case JSON file.
-  ```bash
-  python3 python/myf5_create_inputs_file.py --client-id <id> --client-secret <secret> \
-      --output-file case_inputs.json
-  ```
-
-- **`myf5_create_new_case.py`**  
-  Submits a case payload to MyF5, returning the created support case number and web portal link.
-  ```bash
-  python3 python/myf5_create_new_case.py --client-id <id> --client-secret <secret> \
-      --inputs-file case_inputs.json
-  ```
-
-- **`myf5_list_existing_cases.py`**  
-  Lists active support cases (or all cases including closed).
-  ```bash
-  python3 python/myf5_list_existing_cases.py --client-id <id> --client-secret <secret> [--show-closed]
-  ```
-
-- **`myf5_add_comments_to_existing_case.py`**  
-  Appends text notes or updates to an open support case.
-  ```bash
-  python3 python/myf5_add_comments_to_existing_case.py --client-id <id> --client-secret <secret> \
-      --case-number C1234567 --comment-text-file notes.txt
-  ```
-
----
-
-## Workflow & Usage Guide
-
-```
-[BIG-IP]                      [Local Machine]                   [F5 Cloud APIs]
-   |                                 |                                 |
-   |<-- Generate QKView -------------|                                 |
-   |--- Download QKView ------------>|                                 |
-   |<-- Delete remote QKView --------|                                 |
-   |                                 |--- Get Schema Metadata -------->|
-   |                                 |    (myf5_create_inputs_file)    |
-   |                                 |--- Submit Case ---------------->| (MyF5 Case Created)
-   |                                 |--- Upload QKView & Link Case -->| (iHealth Analyzer)
-```
-
-1. **Verify Connectivity**:
-   ```bash
-   python3 python/bigip_connectivity_test.py --host 192.0.2.1 --username admin --password secret --no-ssl-verify
-   python3 python/myf5_connectivity_test.py --client-id <id> --client-secret <secret>
-   python3 python/ihealth_connectivity_test.py --client-id <id> --client-secret <secret>
-   ```
-2. **Collect QKView from BIG-IP**:
-   ```bash
-   python3 python/bigip_generate_qkview.py --host 192.0.2.1 --username admin --password secret --filename host1.qkview --no-ssl-verify
-   python3 python/bigip_download_qkview.py --host 192.0.2.1 --username admin --password secret --filename host1.qkview --no-ssl-verify
-   python3 python/bigip_delete_qkview.py --host 192.0.2.1 --username admin --password secret --filename host1.qkview --no-ssl-verify
-   ```
-3. **Build Case Inputs & Create Support Ticket**:
-   ```bash
-   python3 python/myf5_create_inputs_file.py --client-id <id> --client-secret <secret> --output-file case_inputs.json
-   python3 python/myf5_create_new_case.py --client-id <id> --client-secret <secret> --inputs-file case_inputs.json
-   ```
-4. **Upload QKView to iHealth Associated with the Case**:
-   ```bash
-   python3 python/ihealth_upload_qkview.py --client-id <id> --client-secret <secret> --filename host1.qkview --support-case C1234567
-   ```
-5. **(Optional) Add Subsequent Notes or Updates**:
-   ```bash
-   python3 python/myf5_add_comments_to_existing_case.py --client-id <id> --client-secret <secret> --case-number C1234567 --comment-text-file notes.txt
-   ```
-
----
-
-## Running Automated Tests
-
-A comprehensive unit test suite is included under `tests/` covering argument parsers, SSL flag validation, Okta and Auth0 authentication flows, K000162308 error diagnostics, iHealth fallback logic, and API call payloads.
-
-To run tests using Python's built-in `unittest` runner:
-```bash
-python3 -m unittest discover -s tests -v
-```
-
-If `pytest` is installed in your virtual environment:
-```bash
-pytest -v
-```
+> This is a community automation toolset and is **not** an official F5 product. Support is not provided by F5 Technical Support. Usage is at your own risk. Please report bugs or submit enhancements via [GitHub Issues](https://github.com/SalesAmerSP/f5_support_case_creation_api_tools/issues).
