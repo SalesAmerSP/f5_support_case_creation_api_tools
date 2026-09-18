@@ -8,7 +8,6 @@ It binds NO network ports, starts NO web/HTTP servers, and requires NO browser.
 import os
 import sys
 import threading
-import queue
 
 try:
     from . import f5functions
@@ -233,10 +232,13 @@ def launch_gui():
             self.log(f"Querying QKViews on {h}...")
             try:
                 res = f5functions.bigip_list_qkviews(h, u, p, verify=False)
-                items = res.get("items", [])
-                self.log(f"Found {len(items)} QKView(s) on appliance:")
-                for it in items:
-                    self.log(f"  - {it.get('filename')} (ID: {it.get('id')})")
+                if res.status_code == 200:
+                    items = res.json().get("items", [])
+                    self.log(f"Found {len(items)} QKView(s) on appliance:")
+                    for it in items:
+                        self.log(f"  - {it.get('name', 'N/A')} (ID: {it.get('id', 'N/A')})")
+                else:
+                    self.log(f"✗ Failed to list QKViews (HTTP {res.status_code}): {res.text}")
             except Exception as e:
                 self.log(f"✗ Listing failed: {e}")
 
@@ -259,10 +261,13 @@ def launch_gui():
                 token = f5functions.myf5_authenticate(f5functions.IHEALTH_APP_ID, cid, csec, scope="ihealth")
                 self.log("✓ Authenticated. Querying QKViews...")
                 res = f5functions.ihealth_list_qkview_ids(token)
-                qvs = res.get("qkviews", [])
-                self.log(f"Total iHealth QKViews found: {len(qvs)}")
-                for qv in qvs:
-                    self.log(f"  QKView ID: {qv.get('id')} | Status: {qv.get('status')} | File: {qv.get('filename')}")
+                if res.status_code == 200:
+                    ids = res.json().get("id", [])
+                    self.log(f"Total iHealth QKViews found: {len(ids)}")
+                    for qid in ids:
+                        self.log(f"  - QKView ID: {qid}")
+                else:
+                    self.log(f"✗ Failed to list iHealth QKViews (HTTP {res.status_code}): {res.text}")
             except Exception as e:
                 self.log(f"✗ iHealth query failed: {e}")
 
@@ -273,7 +278,13 @@ def launch_gui():
                 token = f5functions.myf5_authenticate(f5functions.MYF5_APP_ID, cid, csec, scope="myf5_scope")
                 self.log("✓ Authenticated. Querying cases...")
                 cases = f5functions.myf5_list_support_cases(token)
-                self.log(f"Found support cases: {cases}")
+                if cases.status_code == 200:
+                    data = cases.json().get("data", [])
+                    self.log(f"Found {len(data)} support case(s):")
+                    for c in data:
+                        self.log(f"  - Case {c.get('caseNumber', 'N/A')}: {c.get('subject', 'No Subject')} [{c.get('status', 'Open')}]")
+                else:
+                    self.log(f"✗ Case listing failed (HTTP {cases.status_code}): {cases.text}")
             except Exception as e:
                 self.log(f"✗ Case listing failed: {e}")
 

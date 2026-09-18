@@ -11,4 +11,4 @@ import qkviewmgr.wizard as _orig
 sys.modules[__name__] = _orig
 
 if __name__ == "__main__":
-    _orig.run_auto_wizard()
+    _orig.main_menu()

@@ -38,7 +38,7 @@ docker run --rm -it \
   -v $(pwd):/data \
   -e BIGIP_PASSWORD='your_password' \
   ghcr.io/salesamersp/f5_support_case_creation_api_tools:latest \
-  bigip download --host 192.0.2.1 --name target.qkview --out target.qkview --no-ssl-verify
+  bigip download --host 192.0.2.1 --filename target.qkview --output target.qkview --no-ssl-verify
 ```
 
 ---

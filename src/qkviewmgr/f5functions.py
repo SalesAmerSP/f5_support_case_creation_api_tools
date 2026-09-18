@@ -643,7 +643,10 @@ def bigip_download_qkview(host, username, password, filename, local_filename=Non
     url = _bigip_url(host, f'/mgmt/cm/autodeploy/qkview-downloads/{filename}')
     if not verify:
         urllib3.disable_warnings(InsecureRequestWarning)
-    output_filename = os.path.basename(filename) if local_filename is None else os.path.basename(local_filename)
+    output_filename = os.path.basename(filename) if local_filename is None else local_filename
+    out_dir = os.path.dirname(output_filename)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
     pbar = None
     with open(output_filename, 'wb') as f:
         chunk_size = 512 * 1024
@@ -899,6 +902,29 @@ def myf5_retrieve_case_creation_metadata(access_token, api_fqdn=MYF5_API_FQDN, k
         raise SystemExit(e)
 
 
+# Alias for backward compatibility and CLI convenience
+myf5_add_comments = myf5_add_comments_to_existing_support_case
+
+
+def myf5_connectivity_test(access_token, api_fqdn=MYF5_API_FQDN, k_value=MYF5_API_K_VALUE):
+    """Test connectivity and authentication against MyF5 Support Case API.
+
+    Args:
+        access_token (str): Bearer access token.
+        api_fqdn (str): MyF5 API FQDN (default: support.apis.f5.com).
+        k_value (str): MyF5 client gateway key.
+
+    Returns:
+        bool: True if connectivity succeeds, False otherwise.
+    """
+    resp = myf5_retrieve_case_creation_metadata(access_token, api_fqdn=api_fqdn, k_value=k_value)
+    if resp.status_code == 200:
+        print("✓ Successfully connected and authenticated to MyF5 Support Case API.")
+        return True
+    print(f"✗ Failed to connect to MyF5 API: HTTP {resp.status_code} - {resp.text}")
+    return False
+
+
 # ---------------------------------------------------------------------------
 # iHealth API functions
 # ---------------------------------------------------------------------------
@@ -1088,3 +1114,22 @@ def ihealth_upload_qkview(access_token, filename, support_case_number='', api_fq
             except requests.exceptions.RequestException as fb_e:
                 raise SystemExit(f'iHealth upload failed on primary ({e}) and fallback ({fb_e})')
         raise SystemExit(e)
+
+
+def ihealth_connectivity_test(access_token, api_fqdn=IHEALTH_API_FQDN):
+    """Test connectivity and authentication against F5 iHealth API.
+
+    Args:
+        access_token (str): Bearer access token.
+        api_fqdn (str): iHealth API FQDN (default: ihealth2-api.f5.com).
+
+    Returns:
+        bool: True if connectivity and authentication succeed, False otherwise.
+    """
+    resp = ihealth_list_qkview_ids(access_token, api_fqdn=api_fqdn)
+    if resp.status_code == 200:
+        print("✓ Successfully connected and authenticated to F5 iHealth API.")
+        return True
+    print(f"✗ Failed to connect to F5 iHealth API: HTTP {resp.status_code} - {resp.text}")
+    return False
+

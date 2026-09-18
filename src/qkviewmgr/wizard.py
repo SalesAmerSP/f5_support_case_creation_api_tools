@@ -51,7 +51,6 @@ def run_auto_wizard():
 
     print("\nStarting Auto-Pilot Workflow...")
     print(f"1. Connecting to BIG-IP {host}...")
-    session = f5functions.get_secure_session(verify=ssl_verify)
 
     # Test connectivity
     f5functions.bigip_connectivity_test(host, username, password, verify=ssl_verify)

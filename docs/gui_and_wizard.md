@@ -64,16 +64,17 @@ qkviewmgr wizard
 
 ### Wizard Main Menu
 
-```
-=================================================================
-          qkviewmgr Interactive Terminal Wizard
-=================================================================
+```text
+=======================================================
+          QKViewMgr Interactive Terminal Wizard        
+=======================================================
 
-1. Run Auto-Pilot (Generate -> Download -> Purge -> Upload)
-2. Direct BIG-IP Operations (Test, List, Download, Delete)
-3. Direct iHealth Operations (Test, List, Upload)
-4. System Doctor (Pre-flight Runtime & Network Diagnostics)
-5. Exit
+1. One-Touch Auto-Pilot (Generate -> Download -> Upload)
+2. BIG-IP Connectivity Test
+3. iHealth: List Existing QKViews
+4. iHealth: Upload Local QKView File
+5. System Doctor & Network Diagnostics
+6. Exit
 ```
 
 ### Key Wizard Capabilities

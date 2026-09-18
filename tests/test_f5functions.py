@@ -1,5 +1,5 @@
-"""Unit tests for python/f5functions.py.
-
+"""Unit tests for qkviewmgr.f5functions.
+ 
 Compatible with both python standard library unittest and pytest.
 Gracefully stubs external packages if running in minimal offline environments.
 """
@@ -507,6 +507,52 @@ class TestF5Functions(unittest.TestCase):
             self.assertIn(b'sample.qkview', data)
             stream.close()
 
+    @patch('f5functions.ihealth_list_qkview_ids')
+    def test_ihealth_connectivity_test(self, mock_list):
+        """Verify ihealth_connectivity_test returns True on 200 OK."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_list.return_value = mock_resp
+        with patch('sys.stdout'):
+            result = f5functions.ihealth_connectivity_test('test_token')
+        self.assertTrue(result)
+        mock_list.assert_called_once_with('test_token', api_fqdn=f5functions.IHEALTH_API_FQDN)
+
+    @patch('f5functions.myf5_retrieve_case_creation_metadata')
+    def test_myf5_connectivity_test(self, mock_meta):
+        """Verify myf5_connectivity_test returns True on 200 OK."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_meta.return_value = mock_resp
+        with patch('sys.stdout'):
+            result = f5functions.myf5_connectivity_test('test_token')
+        self.assertTrue(result)
+        mock_meta.assert_called_once_with('test_token', api_fqdn=f5functions.MYF5_API_FQDN, k_value=f5functions.MYF5_API_K_VALUE)
+
+    def test_myf5_add_comments_alias(self):
+        """Verify myf5_add_comments alias references myf5_add_comments_to_existing_support_case."""
+        self.assertIs(f5functions.myf5_add_comments, f5functions.myf5_add_comments_to_existing_support_case)
+
+    @patch('f5functions.requests.get')
+    @patch('f5functions.os.makedirs')
+    def test_bigip_download_qkview_preserves_dir(self, mock_mkdirs, mock_get):
+        """Verify bigip_download_qkview preserves destination directory structure."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.headers = {'Content-Range': '0-9/10'}
+        mock_resp.iter_content = MagicMock(return_value=[b'1234567890'])
+        mock_get.return_value = mock_resp
+
+        m = mock_open()
+        with patch('builtins.open', m):
+            f5functions.bigip_download_qkview(
+                '192.0.2.1', 'admin', 'secret',
+                'sample.qkview', local_filename='/custom/dir/sample.qkview', verify=False
+            )
+        mock_mkdirs.assert_called_once_with('/custom/dir', exist_ok=True)
+        m.assert_called_once_with('/custom/dir/sample.qkview', 'wb')
+
 
 if __name__ == '__main__':
     unittest.main()
+

@@ -1,2 +1,0 @@
-# Pointer to hash-pinned lockfile for backward compatibility
--r ../requirements.lock

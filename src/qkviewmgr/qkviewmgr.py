@@ -10,9 +10,7 @@ Provides:
 """
 
 import argparse
-import getpass
 import json
-import logging
 import os
 import ssl
 import sys
@@ -26,10 +24,6 @@ except ImportError:
     import f5functions
     import wizard
     import gui
-
-
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-logger = logging.getLogger("qkviewmgr")
 
 
 # ---------------------------------------------------------------------------
@@ -207,7 +201,14 @@ def cmd_case(args):
     token = f5functions.myf5_authenticate(args.app_id or f5functions.MYF5_APP_ID, cid, csec, scope="myf5_scope")
 
     if action == "list":
-        f5functions.myf5_list_support_cases(token)
+        resp = f5functions.myf5_list_support_cases(token)
+        if resp.status_code == 200:
+            data = resp.json().get("data", [])
+            print(f"Found {len(data)} support case(s):")
+            for c in data:
+                print(f"  - Case {c.get('caseNumber', 'N/A')}: {c.get('subject', 'No Subject')} [{c.get('status', 'Open')}]")
+        else:
+            print(f"Error HTTP {resp.status_code}: {resp.text}")
     elif action == "metadata":
         resp = f5functions.myf5_retrieve_case_creation_metadata(token)
         if resp.status_code == 200:
@@ -217,9 +218,21 @@ def cmd_case(args):
     elif action == "create":
         with open(args.json_file, "r") as f:
             data = json.load(f)
-        f5functions.myf5_create_new_support_case(token, data)
+        resp = f5functions.myf5_create_new_support_case(token, data)
+        if resp.status_code in (200, 201):
+            res_json = resp.json()
+            case_id = res_json.get("data", {}).get("caseNumber", "N/A")
+            print(f"✓ Case created successfully! Case Number: {case_id}")
+            if "links" in res_json and res_json["links"]:
+                print(f"  Case URL: {res_json['links'][0].get('href')}")
+        else:
+            print(f"Error HTTP {resp.status_code}: {resp.text}")
     elif action == "comment":
-        f5functions.myf5_add_comments(token, args.case_number, args.comment)
+        resp = f5functions.myf5_add_comments_to_existing_support_case(token, args.case_number, args.comment)
+        if resp.status_code == 200:
+            print(f"✓ Comment added to case {args.case_number}.")
+        else:
+            print(f"Error HTTP {resp.status_code}: {resp.text}")
 
 
 # ---------------------------------------------------------------------------

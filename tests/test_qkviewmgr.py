@@ -133,6 +133,69 @@ class TestQKViewMgr(unittest.TestCase):
         mock_del.assert_called_once_with("bigip.local", "admin", "pw123", "test.qkview", verify=False)
         mock_upload.assert_called_once()
 
+    @patch("f5functions.resolve_ihealth_credentials", return_value=("cid", "csec"))
+    @patch("f5functions.myf5_authenticate", return_value="dummy_token")
+    @patch("f5functions.ihealth_connectivity_test", return_value=True)
+    def test_cmd_ihealth_test(self, mock_test, mock_auth, mock_creds):
+        """Verify cmd_ihealth test invokes ihealth_connectivity_test."""
+        args = MagicMock()
+        args.action = "test"
+        args.app_id = None
+        args.client_id = None
+        args.client_secret = None
+        args.profile = None
+
+        with patch("sys.stdout"):
+            qkviewmgr.cmd_ihealth(args)
+
+        mock_test.assert_called_once_with("dummy_token")
+
+    @patch("f5functions.resolve_ihealth_credentials", return_value=("cid", "csec"))
+    @patch("f5functions.myf5_authenticate", return_value="dummy_token")
+    @patch("f5functions.myf5_list_support_cases")
+    def test_cmd_case_list(self, mock_list, mock_auth, mock_creds):
+        """Verify cmd_case list parses and displays cases."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"data": [{"caseNumber": "C123", "subject": "Test", "status": "Open"}]}
+        mock_list.return_value = mock_resp
+
+        args = MagicMock()
+        args.action = "list"
+        args.app_id = None
+        args.client_id = None
+        args.client_secret = None
+        args.profile = None
+
+        with patch("sys.stdout"):
+            qkviewmgr.cmd_case(args)
+
+        mock_list.assert_called_once_with("dummy_token")
+
+    @patch("f5functions.resolve_ihealth_credentials", return_value=("cid", "csec"))
+    @patch("f5functions.myf5_authenticate", return_value="dummy_token")
+    @patch("f5functions.myf5_add_comments_to_existing_support_case")
+    def test_cmd_case_comment(self, mock_comment, mock_auth, mock_creds):
+        """Verify cmd_case comment invokes comments function with proper args."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_comment.return_value = mock_resp
+
+        args = MagicMock()
+        args.action = "comment"
+        args.case_number = "C123"
+        args.comment = "New notes"
+        args.app_id = None
+        args.client_id = None
+        args.client_secret = None
+        args.profile = None
+
+        with patch("sys.stdout"):
+            qkviewmgr.cmd_case(args)
+
+        mock_comment.assert_called_once_with("dummy_token", "C123", "New notes")
+
+
 
 if __name__ == "__main__":
     unittest.main()
