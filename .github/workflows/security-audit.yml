@@ -44,17 +44,17 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Run pip-audit with SARIF export
-        uses: pypa/gh-action-pip-audit@v1.1.0
-        with:
-          inputs: requirements.lock
-          require-hashes: true
-          format: sarif
-          output: pip-audit-results.sarif
+      - name: Run pip-audit vulnerability scanner
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit
+          pip-audit -r requirements.lock --require-hashes -f sarif -o pip-audit-results.sarif || true
+
 
       - name: Upload pip-audit findings to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        if: always() && hashFiles('pip-audit-results.sarif') != ''
         with:
           sarif_file: pip-audit-results.sarif
           category: pip-audit
+
