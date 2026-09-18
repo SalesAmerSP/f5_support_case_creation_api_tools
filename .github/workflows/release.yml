@@ -11,6 +11,9 @@ permissions:
   id-token: write
   attestations: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-binaries:
     name: Build Standalone Binaries
@@ -72,7 +75,7 @@ jobs:
           output-file: ${{ matrix.artifact_name }}.spdx.json
 
       - name: Attest Build Provenance (SLSA Level 3)
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: ${{ matrix.binary_dest }}
 
