@@ -19,6 +19,7 @@ regexes = [
   '''JyLTjnHsBhGhm8eykbyJUmTcVy4fllbU''',
   '''O2QL0nVXodOo9lQTkXjUWNW-zq6Wa-uULjTHAacCqwAJFQGtc2Zwq_3JOlASKC8Z''',
   '''YourAppliancePassword''',
+  '''YourPassword''',
   '''YourF5SupportAPIClientID''',
   '''YourF5SupportAPIClientSecret''',
 ]

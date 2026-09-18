@@ -21,3 +21,4 @@ e198f7f98e04cb5d1035f7a682708dc9e2a50d77:python/f5functions.py:generic-api-key:2
 58503d3a26ebad20a590d85566b3902b95843033:README.md:bigip-admin-password:73
 15af48640c305443cf7a8956c1d5a051565d1170:src/qkviewmgr/f5functions.py:bigip-admin-password:226
 15af48640c305443cf7a8956c1d5a051565d1170:src/qkviewmgr/f5functions.py:bigip-admin-password:240
+15af48640c305443cf7a8956c1d5a051565d1170:examples/README.md:bigip-admin-password:17
