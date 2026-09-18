@@ -241,75 +241,96 @@ class TestF5Functions(unittest.TestCase):
     # MyF5 API functions & Auth0 / Okta flows
     # ---------------------------------------------------------------------------
 
-    @patch('f5functions.requests.post')
-    def test_myf5_retrieve_access_token_okta(self, mock_post):
+    @patch('f5functions.get_secure_session')
+    def test_myf5_retrieve_access_token_okta(self, mock_get_session):
         """Verify legacy Okta token retrieval with HTTPBasicAuth."""
-        mock_post.return_value = MagicMock(status_code=200)
+        mock_session = MagicMock()
+        mock_session.post.return_value = MagicMock(status_code=200)
+        mock_get_session.return_value = mock_session
+
         resp = f5functions.myf5_retrieve_access_token('app', 'cid', 'csec')
         self.assertEqual(resp.status_code, 200)
-        args, kwargs = mock_post.call_args
+        args, kwargs = mock_session.post.call_args
         self.assertIn('identity.account.f5.com', args[0])
         self.assertEqual(kwargs['data']['grant_type'], 'client_credentials')
 
-    @patch('f5functions.requests.post')
-    def test_myf5_retrieve_access_token_auth0(self, mock_post):
+    @patch('f5functions.get_secure_session')
+    def test_myf5_retrieve_access_token_auth0(self, mock_get_session):
         """Verify modern Auth0 token retrieval format on idp.identity.f5.com."""
-        mock_post.return_value = MagicMock(status_code=200)
+        mock_session = MagicMock()
+        mock_session.post.return_value = MagicMock(status_code=200)
+        mock_get_session.return_value = mock_session
+
         resp = f5functions.myf5_retrieve_access_token(
             'app', 'cid', 'csec', auth_fqdn='idp.identity.f5.com'
         )
         self.assertEqual(resp.status_code, 200)
-        args, kwargs = mock_post.call_args
+        args, kwargs = mock_session.post.call_args
         self.assertIn('idp.identity.f5.com/oauth/token', args[0])
         self.assertEqual(kwargs['data']['client_id'], 'cid')
         self.assertEqual(kwargs['data']['client_secret'], 'csec')
         self.assertIsNone(kwargs['auth'])
 
-    @patch('f5functions.requests.post')
-    def test_myf5_retrieve_access_token_custom_auth_url(self, mock_post):
+    @patch('f5functions.get_secure_session')
+    def test_myf5_retrieve_access_token_custom_auth_url(self, mock_get_session):
         """Verify custom auth_url override targeting an enterprise proxy."""
-        mock_post.return_value = MagicMock(status_code=200)
+        mock_session = MagicMock()
+        mock_session.post.return_value = MagicMock(status_code=200)
+        mock_get_session.return_value = mock_session
+
         resp = f5functions.myf5_retrieve_access_token(
             'app', 'cid', 'csec', auth_url='https://custom.idp.local/token'
         )
         self.assertEqual(resp.status_code, 200)
-        args, kwargs = mock_post.call_args
+        args, kwargs = mock_session.post.call_args
         self.assertEqual(args[0], 'https://custom.idp.local/token')
         self.assertEqual(kwargs['data']['client_id'], 'cid')
 
-    @patch('f5functions.requests.get')
-    def test_myf5_list_support_cases(self, mock_get):
+    @patch('f5functions.get_secure_session')
+    def test_myf5_list_support_cases(self, mock_get_session):
         """Verify listing support cases with Bearer authorization header."""
-        mock_get.return_value = MagicMock(status_code=200)
+        mock_session = MagicMock()
+        mock_session.get.return_value = MagicMock(status_code=200)
+        mock_get_session.return_value = mock_session
+
         resp = f5functions.myf5_list_support_cases('token123')
         self.assertEqual(resp.status_code, 200)
-        args, kwargs = mock_get.call_args
+        args, kwargs = mock_session.get.call_args
         self.assertIn('Bearer token123', kwargs['headers']['Authorization'])
 
-    @patch('f5functions.requests.post')
-    def test_myf5_create_new_support_case(self, mock_post):
+    @patch('f5functions.get_secure_session')
+    def test_myf5_create_new_support_case(self, mock_get_session):
         """Verify creating support case forwards JSON payload."""
-        mock_post.return_value = MagicMock(status_code=201)
+        mock_session = MagicMock()
+        mock_session.post.return_value = MagicMock(status_code=201)
+        mock_get_session.return_value = mock_session
+
         payload = {'subject': 'test'}
         resp = f5functions.myf5_create_new_support_case('tok', payload)
         self.assertEqual(resp.status_code, 201)
-        _, kwargs = mock_post.call_args
+        _, kwargs = mock_session.post.call_args
         self.assertEqual(kwargs['json'], payload)
 
-    @patch('f5functions.requests.patch')
-    def test_myf5_add_comments(self, mock_patch):
+    @patch('f5functions.get_secure_session')
+    def test_myf5_add_comments(self, mock_get_session):
         """Verify adding comments uses PATCH on case number URI."""
-        mock_patch.return_value = MagicMock(status_code=200)
+        mock_session = MagicMock()
+        mock_session.patch.return_value = MagicMock(status_code=200)
+        mock_get_session.return_value = mock_session
+
         resp = f5functions.myf5_add_comments_to_existing_support_case('tok', 'C123', 'hello')
         self.assertEqual(resp.status_code, 200)
-        _, kwargs = mock_patch.call_args
+        _, kwargs = mock_session.patch.call_args
         self.assertEqual(kwargs['json'], {'comments': 'hello'})
-        self.assertIn('C123', mock_patch.call_args[0][0])
+        self.assertIn('C123', mock_session.patch.call_args[0][0])
 
-    @patch('f5functions.requests.get')
-    def test_myf5_retrieve_case_creation_metadata(self, mock_get):
+    @patch('f5functions.get_secure_session')
+    def test_myf5_retrieve_case_creation_metadata(self, mock_get_session):
         """Verify retrieving case creation schema metadata."""
-        mock_get.return_value = MagicMock(status_code=200)
+        mock_session = MagicMock()
+        mock_session.get.return_value = MagicMock(status_code=200)
+        mock_get_session.return_value = mock_session
+
         resp = f5functions.myf5_retrieve_case_creation_metadata('tok')
         self.assertEqual(resp.status_code, 200)
 
@@ -317,48 +338,59 @@ class TestF5Functions(unittest.TestCase):
     # iHealth API functions & Fallback
     # ---------------------------------------------------------------------------
 
-    @patch('f5functions.requests.get')
-    def test_ihealth_list_qkview_ids(self, mock_get):
+    @patch('f5functions.get_secure_session')
+    def test_ihealth_list_qkview_ids(self, mock_get_session):
         """Verify listing QKView IDs sends correct vendor accept header."""
-        mock_get.return_value = MagicMock(status_code=200)
+        mock_session = MagicMock()
+        mock_session.get.return_value = MagicMock(status_code=200)
+        mock_get_session.return_value = mock_session
+
         resp = f5functions.ihealth_list_qkview_ids('tok')
         self.assertEqual(resp.status_code, 200)
-        _, kwargs = mock_get.call_args
+        _, kwargs = mock_session.get.call_args
         self.assertIn('Bearer tok', kwargs['headers']['Authorization'])
 
-    @patch('f5functions.requests.get')
-    def test_ihealth_list_qkview_ids_fallback(self, mock_get):
+    @patch('f5functions.get_secure_session')
+    def test_ihealth_list_qkview_ids_fallback(self, mock_get_session):
         """Verify automatic fallback from ihealth2-api to ihealth-api on connection error."""
         primary_fail = f5functions.requests.exceptions.ConnectionError("Primary failed")
         fallback_success = MagicMock(status_code=200)
-        mock_get.side_effect = [primary_fail, fallback_success]
+        mock_session = MagicMock()
+        mock_session.get.side_effect = [primary_fail, fallback_success]
+        mock_get_session.return_value = mock_session
 
         resp = f5functions.ihealth_list_qkview_ids('tok')
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(mock_get.call_count, 2)
-        first_call_url = mock_get.call_args_list[0][0][0]
-        second_call_url = mock_get.call_args_list[1][0][0]
+        self.assertEqual(mock_session.get.call_count, 2)
+        first_call_url = mock_session.get.call_args_list[0][0][0]
+        second_call_url = mock_session.get.call_args_list[1][0][0]
         self.assertIn('ihealth2-api.f5.com', first_call_url)
         self.assertIn('ihealth-api.f5.com', second_call_url)
 
-    @patch('f5functions.requests.get')
-    def test_ihealth_show_qkview_metadata(self, mock_get):
+    @patch('f5functions.get_secure_session')
+    def test_ihealth_show_qkview_metadata(self, mock_get_session):
         """Verify show_qkview_metadata includes QKView ID in target URL."""
-        mock_get.return_value = MagicMock(status_code=200)
+        mock_session = MagicMock()
+        mock_session.get.return_value = MagicMock(status_code=200)
+        mock_get_session.return_value = mock_session
+
         resp = f5functions.ihealth_show_qkview_metadata('tok', '12345')
         self.assertEqual(resp.status_code, 200)
-        self.assertIn('12345', mock_get.call_args[0][0])
+        self.assertIn('12345', mock_session.get.call_args[0][0])
 
     @patch('f5functions.os.path.isfile', return_value=True)
-    @patch('f5functions.requests.post')
-    def test_ihealth_upload_qkview(self, mock_post, mock_isfile):
+    @patch('f5functions.get_secure_session')
+    def test_ihealth_upload_qkview(self, mock_get_session, mock_isfile):
         """Verify uploading QKView file with support case parameter."""
-        mock_post.return_value = MagicMock(status_code=200)
+        mock_session = MagicMock()
+        mock_session.post.return_value = MagicMock(status_code=200)
+        mock_get_session.return_value = mock_session
+
         m = mock_open(read_data=b'qkview data')
         with patch('builtins.open', m):
             resp = f5functions.ihealth_upload_qkview('tok', '/tmp/test.qkview', 'C123')
         self.assertEqual(resp.status_code, 200)
-        _, kwargs = mock_post.call_args
+        _, kwargs = mock_session.post.call_args
         self.assertEqual(kwargs['params']['f5_support_case'], 'C123')
 
     @patch('f5functions.os.path.isfile', return_value=False)
@@ -367,6 +399,45 @@ class TestF5Functions(unittest.TestCase):
         with self.assertRaises(SystemExit) as ctx:
             f5functions.ihealth_upload_qkview('tok', '/tmp/missing.qkview')
         self.assertIn('does not exist', str(ctx.exception))
+
+    # ---------------------------------------------------------------------------
+    # Cryptographic & Streaming Verification
+    # ---------------------------------------------------------------------------
+
+    def test_secure_tls_adapter_config(self):
+        """Verify SecureTLSAdapter enforces TLS 1.2+ minimum and PFS AEAD ciphers."""
+        adapter = f5functions.SecureTLSAdapter()
+        self.assertEqual(adapter.ssl_version, f5functions.ssl.TLSVersion.TLSv1_2)
+        self.assertIn('ECDHE-RSA-AES256-GCM-SHA384', adapter.ciphers)
+
+    def test_get_secure_session_verify_true(self):
+        """Verify get_secure_session mounts SecureTLSAdapter and Mozilla certifi CA bundle."""
+        session = f5functions.get_secure_session(verify=True)
+        self.assertIn('https://', session.adapters)
+        self.assertIsInstance(session.adapters['https://'], f5functions.SecureTLSAdapter)
+        self.assertEqual(session.verify, f5functions.certifi.where())
+
+    def test_get_secure_session_verify_false(self):
+        """Verify get_secure_session handles verify=False for self-signed lab targets."""
+        session = f5functions.get_secure_session(verify=False)
+        self.assertFalse(session.verify)
+
+    def test_multipart_progress_stream(self):
+        """Verify MultipartProgressStream accurately builds boundaries and streams chunks."""
+        m = mock_open(read_data=b'1234567890' * 100)
+        with patch('builtins.open', m), patch('f5functions.os.path.getsize', return_value=1000):
+            stream = f5functions.MultipartProgressStream('field', '/tmp/sample.qkview')
+            self.assertIn('multipart/form-data', stream.content_type)
+            self.assertGreater(len(stream), 1000)
+            data = b''
+            while True:
+                chunk = stream.read(128)
+                if not chunk:
+                    break
+                data += chunk
+            self.assertIn(b'1234567890', data)
+            self.assertIn(b'sample.qkview', data)
+            stream.close()
 
 
 if __name__ == '__main__':

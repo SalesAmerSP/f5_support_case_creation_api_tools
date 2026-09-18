@@ -10,14 +10,31 @@ This module provides reusable utilities for interacting with:
 import argparse
 import logging
 import os
+import ssl
+import uuid
+import certifi
 import requests
+from requests.adapters import HTTPAdapter
 import tqdm
 import urllib3
 from urllib3.exceptions import InsecureRequestWarning
+from urllib3.util.ssl_ import create_urllib3_context
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
+
+# Secure TLS 1.2+ and Modern PFS AEAD Cipher Suites
+SECURE_CIPHERS = (
+    'ECDHE-ECDSA-AES128-GCM-SHA256:'
+    'ECDHE-RSA-AES128-GCM-SHA256:'
+    'ECDHE-ECDSA-AES256-GCM-SHA384:'
+    'ECDHE-RSA-AES256-GCM-SHA384:'
+    'ECDHE-ECDSA-CHACHA20-POLY1305:'
+    'ECDHE-RSA-CHACHA20-POLY1305:'
+    'DHE-RSA-AES128-GCM-SHA256:'
+    'DHE-RSA-AES256-GCM-SHA384'
+)
 
 # Legacy Okta Identity Endpoints (Pre-August 31, 2026; retirement end of September 2026 per K000162308)
 OKTA_IDENTITY_FQDN = 'identity.account.f5.com'
@@ -58,6 +75,130 @@ def _clean_fqdn(val, default=None):
     if not val:
         return default
     return val.replace('https://', '').replace('http://', '').strip('/')
+
+
+class SecureTLSAdapter(HTTPAdapter):
+    """Transport adapter enforcing TLS 1.2 minimum, TLS 1.3 preferred, and modern AEAD ciphers."""
+
+    def __init__(self, ssl_version=ssl.TLSVersion.TLSv1_2, ciphers=SECURE_CIPHERS, **kwargs):
+        self.ssl_version = ssl_version
+        self.ciphers = ciphers
+        super().__init__(**kwargs)
+
+    def init_poolmanager(self, *args, **kwargs):
+        context = create_urllib3_context(ciphers=self.ciphers)
+        context.minimum_version = self.ssl_version
+        kwargs['ssl_context'] = context
+        return super().init_poolmanager(*args, **kwargs)
+
+    def proxy_manager_for(self, *args, **kwargs):
+        context = create_urllib3_context(ciphers=self.ciphers)
+        context.minimum_version = self.ssl_version
+        kwargs['ssl_context'] = context
+        return super().proxy_manager_for(*args, **kwargs)
+
+
+def get_secure_session(verify=True):
+    """Return a requests Session configured with modern TLS enforcement and trusted CAs.
+
+    Args:
+        verify (bool or str): True to verify against Mozilla CA bundle (certifi),
+            or path to custom CA bundle file, or False to disable verification.
+
+    Returns:
+        requests.Session: Configured session enforcing TLS 1.2+ and AEAD ciphers.
+    """
+    session = requests.Session()
+    if verify:
+        adapter = SecureTLSAdapter()
+        session.mount('https://', adapter)
+        session.verify = certifi.where() if verify is True else verify
+    else:
+        session.verify = False
+    return session
+
+
+class MultipartProgressStream:
+    """Streams a multipart form-data file upload with a real-time tqdm progress meter.
+
+    Avoids buffering large files (e.g. 50MB-1GB QKViews) in memory and provides
+    live progress, transfer rate, and ETA indicators during upload over the wire.
+    """
+
+    def __init__(self, field_name, file_path, desc=None):
+        self.boundary = f'----WebKitFormBoundary{uuid.uuid4().hex}'
+        self.content_type = f'multipart/form-data; boundary={self.boundary}'
+        self.file_path = file_path
+        try:
+            self.file_size = os.path.getsize(file_path)
+        except (OSError, TypeError):
+            self.file_size = 0
+        self.filename = os.path.basename(file_path)
+
+        self.header = (
+            f'--{self.boundary}\r\n'
+            f'Content-Disposition: form-data; name="{field_name}"; filename="{self.filename}"\r\n'
+            f'Content-Type: application/octet-stream\r\n\r\n'
+        ).encode('utf-8')
+        self.footer = f'\r\n--{self.boundary}--\r\n'.encode('utf-8')
+        self.total_size = len(self.header) + self.file_size + len(self.footer)
+
+        self._header_sent = 0
+        self._file = open(file_path, 'rb')
+        self._file_sent = 0
+        self._footer_sent = 0
+
+        self.pbar = tqdm.tqdm(
+            total=self.file_size,
+            unit='B',
+            unit_scale=True,
+            unit_divisor=1024,
+            desc=desc or f'Uploading {self.filename}',
+            miniters=1,
+        )
+
+    def __len__(self):
+        return self.total_size
+
+    def read(self, size=-1):
+        if size == -1 or size is None:
+            size = 65536
+
+        # 1. Stream boundary header
+        if self._header_sent < len(self.header):
+            chunk = self.header[self._header_sent:self._header_sent + size]
+            self._header_sent += len(chunk)
+            return chunk
+
+        # 2. Stream file content with live progress
+        if self._file_sent < self.file_size or self.file_size == 0:
+            to_read = min(size, self.file_size - self._file_sent) if self.file_size > 0 else size
+            chunk = self._file.read(to_read)
+            if chunk:
+                self._file_sent += len(chunk)
+                if self.pbar:
+                    self.pbar.update(len(chunk))
+                return chunk
+
+        # 3. Stream boundary footer
+        if self._footer_sent < len(self.footer):
+            chunk = self.footer[self._footer_sent:self._footer_sent + size]
+            self._footer_sent += len(chunk)
+            return chunk
+
+        return b''
+
+    def close(self):
+        if hasattr(self, 'pbar') and self.pbar:
+            self.pbar.close()
+        if hasattr(self, '_file') and self._file and not self._file.closed:
+            self._file.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
 
 
 # ---------------------------------------------------------------------------
@@ -388,7 +529,7 @@ def bigip_download_qkview(host, username, password, filename, local_filename=Non
                     total=total_size + 1,
                     unit='B',
                     unit_scale=True,
-                    desc=os.path.basename(output_filename)
+                    desc=f'Downloading {os.path.basename(output_filename)}'
                 )
                 if chunk_size > total_size:
                     end = total_size
@@ -485,8 +626,9 @@ def myf5_retrieve_access_token(app_id, client_id, client_secret, scope='myf5_sco
         headers = {'Content-Type': 'application/x-www-form-urlencoded'}
         auth = requests.auth.HTTPBasicAuth(client_id, client_secret)
 
+    session = get_secure_session(verify=True)
     try:
-        return requests.post(
+        return session.post(
             url,
             auth=auth,
             data=payload,
@@ -515,8 +657,9 @@ def myf5_list_support_cases(access_token, api_fqdn=MYF5_API_FQDN, k_value=MYF5_A
     """
     fqdn = _clean_fqdn(api_fqdn, default=MYF5_API_FQDN)
     url = f'https://{fqdn}/case-management/v1/cases?type=ALL_CASES&k={k_value}'
+    session = get_secure_session(verify=True)
     try:
-        return requests.get(url, headers={'accept': 'application/json', 'Authorization': f'Bearer {access_token}'})
+        return session.get(url, headers={'accept': 'application/json', 'Authorization': f'Bearer {access_token}'})
     except requests.exceptions.RequestException as e:
         raise SystemExit(e)
 
@@ -538,8 +681,9 @@ def myf5_create_new_support_case(access_token, json_payload, api_fqdn=MYF5_API_F
     """
     fqdn = _clean_fqdn(api_fqdn, default=MYF5_API_FQDN)
     url = f'https://{fqdn}/case-management/v1/cases?k={k_value}'
+    session = get_secure_session(verify=True)
     try:
-        return requests.post(
+        return session.post(
             url,
             headers={'content-type': 'application/json', 'accept': 'application/json', 'Authorization': f'Bearer {access_token}'},
             json=json_payload
@@ -566,8 +710,9 @@ def myf5_add_comments_to_existing_support_case(access_token, case_number, commen
     """
     fqdn = _clean_fqdn(api_fqdn, default=MYF5_API_FQDN)
     url = f'https://{fqdn}/case-management/v1/cases/{case_number}?k={k_value}'
+    session = get_secure_session(verify=True)
     try:
-        return requests.patch(
+        return session.patch(
             url,
             headers={'content-type': 'application/json', 'accept': 'application/json', 'Authorization': f'Bearer {access_token}'},
             json={'comments': str(comments)}
@@ -592,8 +737,9 @@ def myf5_retrieve_case_creation_metadata(access_token, api_fqdn=MYF5_API_FQDN, k
     """
     fqdn = _clean_fqdn(api_fqdn, default=MYF5_API_FQDN)
     url = f'https://{fqdn}/case-management/v1/cases/metadata?k={k_value}'
+    session = get_secure_session(verify=True)
     try:
-        return requests.get(url, headers={'accept': 'application/json', 'Authorization': f'Bearer {access_token}'})
+        return session.get(url, headers={'accept': 'application/json', 'Authorization': f'Bearer {access_token}'})
     except requests.exceptions.RequestException as e:
         raise SystemExit(e)
 
@@ -623,14 +769,15 @@ def ihealth_list_qkview_ids(access_token, api_fqdn=IHEALTH_API_FQDN):
         'accept': 'application/vnd.f5.ihealth.api.v1.0+json',
         'Authorization': f'Bearer {access_token}'
     }
+    session = get_secure_session(verify=True)
     try:
-        return requests.get(url, headers=headers)
+        return session.get(url, headers=headers)
     except requests.exceptions.RequestException as e:
         if fqdn == IHEALTH_API_FQDN and IHEALTH_FALLBACK_API_FQDN:
             fallback_url = f'https://{IHEALTH_FALLBACK_API_FQDN}/qkview-analyzer/api/qkviews/'
             logger.warning('Failed to connect to %s (%s), falling back to %s', url, e, fallback_url)
             try:
-                return requests.get(fallback_url, headers=headers)
+                return session.get(fallback_url, headers=headers)
             except requests.exceptions.RequestException as fb_e:
                 raise SystemExit(f'iHealth request failed on primary ({e}) and fallback ({fb_e})')
         raise SystemExit(e)
@@ -656,14 +803,15 @@ def ihealth_show_qkview_metadata(access_token, qkview_id, api_fqdn=IHEALTH_API_F
         'accept': 'application/vnd.f5.ihealth.api.v1.0+json',
         'Authorization': f'Bearer {access_token}'
     }
+    session = get_secure_session(verify=True)
     try:
-        return requests.get(url, headers=headers)
+        return session.get(url, headers=headers)
     except requests.exceptions.RequestException as e:
         if fqdn == IHEALTH_API_FQDN and IHEALTH_FALLBACK_API_FQDN:
             fallback_url = f'https://{IHEALTH_FALLBACK_API_FQDN}/qkview-analyzer/api/qkviews/{qkview_id}'
             logger.warning('Failed to connect to %s (%s), falling back to %s', url, e, fallback_url)
             try:
-                return requests.get(fallback_url, headers=headers)
+                return session.get(fallback_url, headers=headers)
             except requests.exceptions.RequestException as fb_e:
                 raise SystemExit(f'iHealth request failed on primary ({e}) and fallback ({fb_e})')
         raise SystemExit(e)
@@ -701,12 +849,16 @@ def ihealth_upload_qkview(access_token, filename, support_case_number='', api_fq
     if support_case_number:
         params['f5_support_case'] = support_case_number
 
+    session = get_secure_session(verify=True)
     try:
-        with open(filename, 'rb') as f:
-            return requests.post(
+        with MultipartProgressStream('qkview', filename, desc=f'Uploading {os.path.basename(filename)}') as stream:
+            upload_headers = dict(headers)
+            upload_headers['Content-Type'] = stream.content_type
+            upload_headers['Content-Length'] = str(len(stream))
+            return session.post(
                 url,
-                files={'qkview': (os.path.basename(filename), f)},
-                headers=headers,
+                data=stream,
+                headers=upload_headers,
                 params=params
             )
     except requests.exceptions.RequestException as e:
@@ -714,11 +866,14 @@ def ihealth_upload_qkview(access_token, filename, support_case_number='', api_fq
             fallback_url = f'https://{IHEALTH_FALLBACK_API_FQDN}/qkview-analyzer/api/qkviews'
             logger.warning('Failed to upload to %s (%s), falling back to %s', url, e, fallback_url)
             try:
-                with open(filename, 'rb') as f:
-                    return requests.post(
+                with MultipartProgressStream('qkview', filename, desc=f'Uploading {os.path.basename(filename)} (fallback)') as stream:
+                    upload_headers = dict(headers)
+                    upload_headers['Content-Type'] = stream.content_type
+                    upload_headers['Content-Length'] = str(len(stream))
+                    return session.post(
                         fallback_url,
-                        files={'qkview': (os.path.basename(filename), f)},
-                        headers=headers,
+                        data=stream,
+                        headers=upload_headers,
                         params=params
                     )
             except requests.exceptions.RequestException as fb_e:
