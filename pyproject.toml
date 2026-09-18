@@ -31,7 +31,7 @@ dependencies = [
 ]
 
 [project.scripts]
-qkviewmgr = "qkviewmgr:main"
+qkviewmgr = "qkviewmgr.qkviewmgr:main"
 
 [project.optional-dependencies]
 dev = [
@@ -43,5 +43,6 @@ build = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["python"]
+where = ["src"]
+
 

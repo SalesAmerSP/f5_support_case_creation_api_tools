@@ -1,0 +1,4 @@
+# Standard requirements pointer to hash-pinned lockfile
+# For strict cryptographic hash verification in production or CI:
+#   pip install --require-hashes -r requirements.lock
+-r requirements.lock

@@ -7,13 +7,17 @@ import certifi
 block_cipher = None
 
 a = Analysis(
-    ['python/qkviewmgr.py'],
-    pathex=['python'],
+    ['src/qkviewmgr/qkviewmgr.py'],
+    pathex=['src', 'src/qkviewmgr'],
     binaries=[],
     datas=[
         (certifi.where(), 'certifi'),
     ],
     hiddenimports=[
+        'qkviewmgr',
+        'qkviewmgr.f5functions',
+        'qkviewmgr.wizard',
+        'qkviewmgr.gui',
         'f5functions',
         'wizard',
         'gui',
@@ -24,6 +28,7 @@ a = Analysis(
         'configparser',
         'getpass',
     ],
+
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

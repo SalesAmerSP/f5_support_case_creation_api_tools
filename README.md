@@ -52,9 +52,36 @@ This toolset automates the complete lifecycle of opening F5 support cases and ma
 
 Compatible with **Python 3.10, 3.11, 3.12, 3.13, and 3.14**, as well as pre-compiled standalone executables requiring **zero** runtime dependencies.
 
+### Clean Repository Layout
+
+```
+f5_support_case_creation_api_tools/
+├── src/qkviewmgr/            # Canonical PEP 517/621 Python package & core engine
+│   ├── __init__.py           # Package exports
+│   ├── __main__.py           # Executable entrypoint (`python -m qkviewmgr`)
+│   ├── qkviewmgr.py          # Unified CLI dispatcher & Auto-Pilot orchestrator
+│   ├── f5functions.py        # Core iControl REST, iHealth, & MyF5 client
+│   ├── gui.py                # Native desktop GUI (strictly NO web services)
+│   └── wizard.py             # Interactive terminal wizard
+├── examples/                 # Standalone developer scripts for custom workflows
+│   ├── README.md             # Developer integration guide & index
+│   ├── bigip_*.py            # Standalone BIG-IP utilities
+│   ├── ihealth_*.py          # Standalone iHealth utilities
+│   └── myf5_*.py             # Standalone MyF5 case utilities
+├── python/                   # Backward-compatibility shims for legacy invocations
+├── scripts/                  # Build & packaging automation (PyInstaller)
+├── tests/                    # Comprehensive unit tests (44/44 passing)
+├── .github/                  # CI/CD, GHAS CodeQL, Dependabot, Releases
+├── qkviewmgr.spec            # Standalone binary compilation spec
+├── requirements.lock         # Cryptographically hash-pinned dependencies
+├── requirements.txt          # Root dependency pointer
+└── pyproject.toml            # Project packaging specification
+```
+
 ---
 
 ## Zero-Secret Credential Security
+
 
 Passing passwords or API keys as command-line arguments is insecure because secrets appear in plain text in process listings (`ps aux`), process audit logs, and shell history (`.bash_history`, `.zsh_history`).
 
@@ -207,7 +234,7 @@ Our GitHub Actions release workflow (`.github/workflows/release.yml`) compiles c
 
 ## Individual Developer Scripts Reference
 
-All 14 individual standalone scripts are retained under `python/` for custom integrations, automation scripts, and workflows. All scripts inherit zero-secret credential resolution:
+All 14 individual standalone scripts are organized under [`examples/`](examples/README.md) (with backward-compatibility shims preserved under `python/`) for custom integrations, automation scripts, and workflows. All scripts inherit zero-secret credential resolution:
 
 ### BIG-IP Tools
 - **`bigip_connectivity_test.py`**: Validate iControl REST reachability against `/mgmt/tm/sys/ready`.

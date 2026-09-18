@@ -41,8 +41,11 @@ except ImportError:
     sys.modules['urllib3.exceptions'] = mock_urllib3.exceptions
     sys.modules['tqdm'] = mock_tqdm
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'qkviewmgr'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'python'))
 import f5functions
+
 
 
 class TestF5Functions(unittest.TestCase):

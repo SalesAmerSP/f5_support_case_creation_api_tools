@@ -5,9 +5,12 @@ import sys
 import unittest
 from unittest.mock import patch, MagicMock
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "qkviewmgr"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 import qkviewmgr
 import f5functions
+
 
 
 class TestQKViewMgr(unittest.TestCase):
