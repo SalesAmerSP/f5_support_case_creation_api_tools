@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "f5-support-case-creation-api-tools"
-version = "1.2.0"
+version = "1.3.0"
 description = "CLI tools for F5 BIG-IP QKView generation, retrieval, and MyF5/iHealth support case integration"
 readme = "README.md"
 requires-python = ">=3.10"
