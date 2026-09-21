@@ -307,6 +307,139 @@ class TestF5Functions(unittest.TestCase):
             f5functions.bigip_delete_qkview('host', 'user', 'pass', 'test.qkview')
         self.assertIn('Failed to list', str(ctx.exception))
 
+    @patch('f5functions.requests.get')
+    def test_bigip_query_qkview_task(self, mock_get):
+        """Verify bigip_query_qkview_task queries the specific task ID on autodeploy endpoint."""
+        mock_get.return_value = MagicMock(
+            status_code=200,
+            json=MagicMock(return_value={
+                "id": "task-uuid-1234",
+                "name": "audit.qkview",
+                "status": "IN_PROGRESS",
+                "kind": "cm:autodeploy:qkview:qkviewitemstate"
+            })
+        )
+        resp = f5functions.bigip_query_qkview_task('host', 'user', 'pass', 'task-uuid-1234')
+        self.assertEqual(resp.status_code, 200)
+        args, _ = mock_get.call_args
+        self.assertIn('/mgmt/cm/autodeploy/qkview/task-uuid-1234', args[0])
+
+    @patch('f5functions.bigip_query_qkview_task')
+    def test_bigip_wait_for_qkview_immediate_success(self, mock_query):
+        """Verify bigip_wait_for_qkview terminates immediately when status is SUCCEEDED."""
+        mock_query.return_value = MagicMock(
+            status_code=200,
+            json=MagicMock(return_value={
+                "id": "task-uuid-1234",
+                "status": "SUCCEEDED",
+                "qkviewUri": "https://localhost/mgmt/cm/autodeploy/qkview-downloads/audit.qkview"
+            })
+        )
+        task = f5functions.bigip_wait_for_qkview('host', 'user', 'pass', 'task-uuid-1234', interval=0.01, timeout=5)
+        self.assertEqual(task['status'], 'SUCCEEDED')
+        self.assertEqual(mock_query.call_count, 1)
+
+    @patch('f5functions.bigip_query_qkview_task')
+    def test_bigip_wait_for_qkview_transition(self, mock_query):
+        """Verify bigip_wait_for_qkview polls through IN_PROGRESS to SUCCEEDED."""
+        in_prog = MagicMock(status_code=200, json=MagicMock(return_value={"status": "IN_PROGRESS"}))
+        succeeded = MagicMock(status_code=200, json=MagicMock(return_value={"status": "SUCCEEDED"}))
+        mock_query.side_effect = [in_prog, in_prog, succeeded]
+
+        task = f5functions.bigip_wait_for_qkview('host', 'user', 'pass', 'task-uuid-1234', interval=0.01, timeout=5)
+        self.assertEqual(task['status'], 'SUCCEEDED')
+        self.assertEqual(mock_query.call_count, 3)
+
+    @patch('f5functions.bigip_query_qkview_task')
+    def test_bigip_wait_for_qkview_failure_status(self, mock_query):
+        """Verify bigip_wait_for_qkview raises RuntimeError when task status is FAILED."""
+        failed = MagicMock(status_code=200, json=MagicMock(return_value={"status": "FAILED", "errorMessage": "Disk full"}))
+        mock_query.return_value = failed
+
+        with self.assertRaises(RuntimeError) as ctx:
+            f5functions.bigip_wait_for_qkview('host', 'user', 'pass', 'task-uuid-1234', interval=0.01, timeout=5)
+        self.assertIn("failed", str(ctx.exception).lower())
+
+    @patch('f5functions.bigip_query_qkview_task')
+    def test_bigip_wait_for_qkview_timeout(self, mock_query):
+        """Verify bigip_wait_for_qkview raises TimeoutError when exceeding timeout."""
+        in_prog = MagicMock(status_code=200, json=MagicMock(return_value={"status": "IN_PROGRESS"}))
+        mock_query.return_value = in_prog
+
+        with self.assertRaises(TimeoutError):
+            f5functions.bigip_wait_for_qkview('host', 'user', 'pass', 'task-uuid-1234', interval=0.01, timeout=0.03)
+
+    @patch('f5functions.requests.get')
+    def test_bigip_get_system_info_tmos_parity(self, mock_get):
+        """Verify bigip_get_system_info extracts hostname, version, build, edition, and failover state matching TMOS 17.1.3.5."""
+        def side_effect(url, **kwargs):
+            m = MagicMock()
+            m.status_code = 200
+            if 'global-settings' in url:
+                m.json.return_value = {
+                    "kind": "tm:sys:global-settings:global-settingsstate",
+                    "hostname": "bigip-a.lab.local"
+                }
+            elif 'sys/version' in url:
+                m.json.return_value = {
+                    "kind": "tm:sys:version:versionstats",
+                    "entries": {
+                        "https://localhost/mgmt/tm/sys/version/0": {
+                            "nestedStats": {
+                                "entries": {
+                                    "Version": {"description": "17.1.3.5"},
+                                    "Build": {"description": "0.0.14"},
+                                    "Edition": {"description": "Point Release 5"},
+                                    "Product": {"description": "BIG-IP"}
+                                }
+                            }
+                        }
+                    }
+                }
+            elif 'sys/failover' in url:
+                m.json.return_value = {
+                    "kind": "tm:sys:failover:failoverstats",
+                    "apiRawValues": {
+                        "apiAnonymous": "Failover active for 2d 21:09:55\n"
+                    }
+                }
+            return m
+
+        mock_get.side_effect = side_effect
+        info = f5functions.bigip_get_system_info('52.73.20.25', 'admin', 'secret', verify=False)
+        self.assertEqual(info['hostname'], 'bigip-a.lab.local')
+        self.assertEqual(info['version'], '17.1.3.5')
+        self.assertEqual(info['build'], '0.0.14')
+        self.assertEqual(info['edition'], 'Point Release 5')
+        self.assertEqual(info['failover_state'], 'active')
+
+    @patch('f5functions.requests.get')
+    def test_bigip_get_system_info_failover_standby(self, mock_get):
+        """Verify bigip_get_system_info correctly parses standby failover state."""
+        def side_effect(url, **kwargs):
+            m = MagicMock()
+            m.status_code = 200
+            if 'global-settings' in url:
+                m.json.return_value = {"hostname": "bigip-b.lab.local"}
+            elif 'sys/version' in url:
+                m.json.return_value = {
+                    "entries": {
+                        "https://localhost/mgmt/tm/sys/version/0": {
+                            "nestedStats": {"entries": {"Version": {"description": "17.1.3.5"}, "Build": {"description": "0.0.14"}}}
+                        }
+                    }
+                }
+            elif 'sys/failover' in url:
+                m.json.return_value = {
+                    "apiRawValues": {"apiAnonymous": "Failover standby for 1d 04:12:00\n"}
+                }
+            return m
+
+        mock_get.side_effect = side_effect
+        info = f5functions.bigip_get_system_info('44.214.252.110', 'admin', 'secret', verify=False)
+        self.assertEqual(info['hostname'], 'bigip-b.lab.local')
+        self.assertEqual(info['failover_state'], 'standby')
+
     # ---------------------------------------------------------------------------
     # MyF5 API functions & Auth0 / Okta flows
     # ---------------------------------------------------------------------------
@@ -553,6 +686,133 @@ class TestF5Functions(unittest.TestCase):
             )
         mock_mkdirs.assert_called_once_with('/custom/dir', exist_ok=True)
         m.assert_called_once_with('/custom/dir/sample.qkview', 'wb')
+
+# ---------------------------------------------------------------------------
+# TMOS 17.1.3.5 High-Fidelity Parity Unit Tests
+# ---------------------------------------------------------------------------
+
+TMOS_GLOBAL_SETTINGS_PAYLOAD = {
+    "kind": "tm:sys:global-settings:global-settingsstate",
+    "selfLink": "https://localhost/mgmt/tm/sys/global-settings?ver=17.1.3.5",
+    "hostname": "bigip-a.lab.local"
+}
+
+TMOS_VERSION_PAYLOAD = {
+    "kind": "tm:sys:version:versionstats",
+    "selfLink": "https://localhost/mgmt/tm/sys/version?ver=17.1.3.5",
+    "entries": {
+        "https://localhost/mgmt/tm/sys/version/0": {
+            "nestedStats": {
+                "entries": {
+                    "Build": {"description": "0.0.14"},
+                    "Edition": {"description": "Point Release 5"},
+                    "Product": {"description": "BIG-IP"},
+                    "Version": {"description": "17.1.3.5"}
+                }
+            }
+        }
+    }
+}
+
+TMOS_FAILOVER_PAYLOAD = {
+    "kind": "tm:sys:failover:failoverstats",
+    "selfLink": "https://localhost/mgmt/tm/sys/failover?ver=17.1.3.5",
+    "apiRawValues": {
+        "apiAnonymous": "Failover active for 2d 21:09:55\n"
+    }
+}
+
+TMOS_QKVIEW_IN_PROGRESS = {
+    "id": "task-uuid-1234",
+    "name": "test.qkview",
+    "status": "IN_PROGRESS",
+    "generation": 1,
+    "lastUpdateMicros": 1790018437948967,
+    "kind": "cm:autodeploy:qkview:qkviewitemstate",
+    "selfLink": "https://localhost/mgmt/cm/autodeploy/qkview/task-uuid-1234"
+}
+
+TMOS_QKVIEW_SUCCEEDED = {
+    "id": "task-uuid-1234",
+    "name": "test.qkview",
+    "status": "SUCCEEDED",
+    "qkviewUri": "https://localhost/mgmt/cm/autodeploy/qkview-downloads/test.qkview",
+    "generation": 2,
+    "lastUpdateMicros": 1790018600000000,
+    "kind": "cm:autodeploy:qkview:qkviewitemstate",
+    "selfLink": "https://localhost/mgmt/cm/autodeploy/qkview/task-uuid-1234"
+}
+
+
+class TestTMOSLiveParity(unittest.TestCase):
+    """Rigorous tests asserting exact TMOS 17.1.x API schema parity."""
+
+    @patch("f5functions.requests.get")
+    def test_bigip_get_system_info_tmos_schema(self, mock_get):
+        """Verify bigip_get_system_info correctly parses live TMOS nested schemas."""
+        resp_settings = MagicMock(status_code=200, json=lambda: TMOS_GLOBAL_SETTINGS_PAYLOAD)
+        resp_version = MagicMock(status_code=200, json=lambda: TMOS_VERSION_PAYLOAD)
+        resp_failover = MagicMock(status_code=200, json=lambda: TMOS_FAILOVER_PAYLOAD)
+
+        mock_get.side_effect = [resp_settings, resp_version, resp_failover]
+
+        info = f5functions.bigip_get_system_info("192.0.2.1", "admin", "secret", verify=False)
+
+        self.assertEqual(info["hostname"], "bigip-a.lab.local")
+        self.assertEqual(info["version"], "17.1.3.5")
+        self.assertEqual(info["build"], "0.0.14")
+        self.assertEqual(info["edition"], "Point Release 5")
+        self.assertEqual(info["product"], "BIG-IP")
+        self.assertIn("active", info["failover_state"].lower())
+
+    @patch("f5functions.bigip_query_qkview_task")
+    @patch("time.sleep", return_value=None)
+    def test_bigip_wait_for_qkview_lifecycle_progression(self, mock_sleep, mock_query):
+        """Verify bigip_wait_for_qkview polls from IN_PROGRESS to SUCCEEDED."""
+        resp_prog = MagicMock(status_code=200, json=lambda: TMOS_QKVIEW_IN_PROGRESS)
+        resp_succ = MagicMock(status_code=200, json=lambda: TMOS_QKVIEW_SUCCEEDED)
+        mock_query.side_effect = [resp_prog, resp_succ]
+
+        cb_statuses = []
+        result = f5functions.bigip_wait_for_qkview(
+            "192.0.2.1", "admin", "secret", "task-uuid-1234",
+            timeout=10, poll_interval=1, verify=False,
+            callback=lambda st, data: cb_statuses.append(st)
+        )
+
+        self.assertEqual(result["status"], "SUCCEEDED")
+        self.assertEqual(cb_statuses, ["IN_PROGRESS", "SUCCEEDED"])
+        self.assertEqual(mock_query.call_count, 2)
+
+    @patch("f5functions.bigip_query_qkview_task")
+    @patch("time.sleep", return_value=None)
+    def test_bigip_wait_for_qkview_failure_raises(self, mock_sleep, mock_query):
+        """Verify bigip_wait_for_qkview raises RuntimeError when task status is FAILED."""
+        failed_payload = dict(TMOS_QKVIEW_IN_PROGRESS)
+        failed_payload["status"] = "FAILED"
+        failed_payload["errorMessage"] = "Disk full on /var/tmp"
+
+        mock_query.return_value = MagicMock(status_code=200, json=lambda: failed_payload)
+
+        with self.assertRaises(RuntimeError) as ctx:
+            f5functions.bigip_wait_for_qkview(
+                "192.0.2.1", "admin", "secret", "task-uuid-1234",
+                timeout=10, poll_interval=1, verify=False
+            )
+        self.assertIn("Disk full on /var/tmp", str(ctx.exception))
+
+    @patch("f5functions.bigip_query_qkview_task")
+    @patch("time.sleep", return_value=None)
+    def test_bigip_wait_for_qkview_timeout_raises(self, mock_sleep, mock_query):
+        """Verify bigip_wait_for_qkview raises TimeoutError when timeout expires."""
+        mock_query.return_value = MagicMock(status_code=200, json=lambda: TMOS_QKVIEW_IN_PROGRESS)
+
+        with patch("time.time", side_effect=[0, 1, 2, 100]):
+            with self.assertRaises(TimeoutError):
+                f5functions.bigip_wait_for_qkview(
+                    "192.0.2.1", "admin", "secret", "task-uuid-1234",
+                    timeout=5, poll_interval=1, verify=False
+                )
 
 
 if __name__ == '__main__':

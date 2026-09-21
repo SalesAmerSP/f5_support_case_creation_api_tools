@@ -654,11 +654,11 @@ def bigip_query_qkview_task(host, username, password, task_id, verify=True):
     )
 
 
-def bigip_wait_for_qkview(host, username, password, task_id, timeout=300, poll_interval=5, verify=True, callback=None):
-    """Poll a BIG-IP QKView generation task until completion, failure, or timeout.
+def bigip_wait_for_qkview(host, username, password, task_id, timeout=300, poll_interval=5, verify=True, callback=None, **kwargs):
+    """Poll a QKView generation task until completion.
 
     Args:
-        host (str): BIG-IP hostname or IP address.
+        host (str): BIG-IP hostname or IP.
         username (str): BIG-IP username.
         password (str): BIG-IP password.
         task_id (str): QKView generation task UUID.
@@ -666,6 +666,7 @@ def bigip_wait_for_qkview(host, username, password, task_id, timeout=300, poll_i
         poll_interval (int): Polling interval in seconds (default: 5).
         verify (bool): Whether to verify SSL certificates.
         callback (callable, optional): Optional callback called with (status, task_data).
+        **kwargs: Supports 'interval' as an alias for poll_interval.
 
     Returns:
         dict: The final task state dictionary.
@@ -674,6 +675,8 @@ def bigip_wait_for_qkview(host, username, password, task_id, timeout=300, poll_i
         TimeoutError: If task does not complete within timeout seconds.
         RuntimeError: If task status reports FAILED or task cannot be queried.
     """
+    if "interval" in kwargs and kwargs["interval"] is not None:
+        poll_interval = kwargs["interval"]
     import time
     start = time.time()
     last_status = None
@@ -750,7 +753,14 @@ def bigip_get_system_info(host, username, password, verify=True):
         if r.status_code == 200:
             raw = r.json().get("apiRawValues", {}).get("apiAnonymous", "").strip()
             if raw:
-                info["failover_state"] = raw
+                raw_lower = raw.lower()
+                if "active" in raw_lower:
+                    info["failover_state"] = "active"
+                elif "standby" in raw_lower:
+                    info["failover_state"] = "standby"
+                else:
+                    info["failover_state"] = raw
+                info["failover_raw"] = raw
     except Exception:
         pass
 

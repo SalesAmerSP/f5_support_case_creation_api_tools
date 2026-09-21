@@ -94,6 +94,7 @@ class TestQKViewMgr(unittest.TestCase):
     @patch("f5functions.ihealth_upload_qkview")
     @patch("f5functions.bigip_delete_qkview")
     @patch("f5functions.bigip_download_qkview")
+    @patch("f5functions.bigip_wait_for_qkview")
     @patch("f5functions.bigip_generate_qkview")
     @patch("f5functions.bigip_connectivity_test")
     @patch("f5functions.myf5_authenticate", return_value="tok123")
@@ -102,9 +103,14 @@ class TestQKViewMgr(unittest.TestCase):
     @patch("os.path.getsize", return_value=1048576)
     def test_cmd_auto_pilot_flow(
         self, mock_size, mock_bigip_pw, mock_ih_creds, mock_auth,
-        mock_test, mock_gen, mock_down, mock_del, mock_upload
+        mock_test, mock_gen, mock_wait, mock_down, mock_del, mock_upload
     ):
-        """Verify full 5-step Auto-Pilot pipeline execution."""
+        """Verify full 5-step Auto-Pilot pipeline execution including async task waiting."""
+        mock_gen_resp = MagicMock()
+        mock_gen_resp.status_code = 202
+        mock_gen_resp.json.return_value = {"id": "task-uuid-456"}
+        mock_gen.return_value = mock_gen_resp
+
         mock_upload_resp = MagicMock()
         mock_upload_resp.status_code = 200
         mock_upload_resp.json.return_value = {"id": "qv999"}
@@ -132,6 +138,7 @@ class TestQKViewMgr(unittest.TestCase):
 
         mock_test.assert_called_once_with("bigip.local", "admin", "pw123", verify=False)
         mock_gen.assert_called_once_with("bigip.local", "admin", "pw123", "test.qkview", no_truncate=False, verify=False)
+        mock_wait.assert_called_once_with("bigip.local", "admin", "pw123", "task-uuid-456", verify=False)
         mock_down.assert_called_once_with("bigip.local", "admin", "pw123", "test.qkview", os.path.join(".", "test.qkview"), verify=False)
         mock_del.assert_called_once_with("bigip.local", "admin", "pw123", "test.qkview", verify=False)
         mock_upload.assert_called_once()

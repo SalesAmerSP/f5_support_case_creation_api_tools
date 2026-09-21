@@ -118,7 +118,6 @@ f5_support_case_creation_api_tools/
 │   ├── bigip_*.py            # Standalone BIG-IP utilities
 │   ├── ihealth_*.py          # Standalone iHealth utilities
 │   └── myf5_*.py             # Standalone MyF5 case utilities
-├── python/                   # Backward-compatibility shims for legacy invocations
 ├── tests/                    # Comprehensive unit & integration tests (96/96 passing)
 │   ├── test_f5functions.py   # Core API functions and credential resolution
 │   ├── test_qkviewmgr.py     # CLI dispatcher and command handlers
@@ -128,6 +127,7 @@ f5_support_case_creation_api_tools/
 │   └── test_live_integration.py # Live TMOS appliance integration tests
 ├── .github/                  # CI/CD, GHAS CodeQL, Dependabot, Container workflows
 │   └── workflows/
+│       ├── test.yml          # Automated pytest matrix across Python 3.10-3.13 & OS
 │       ├── container.yml     # Multi-arch Docker build & push to GHCR
 │       ├── codeql.yml        # CodeQL static analysis
 │       ├── security-audit.yml# Hash-pinned verification & pip-audit
@@ -145,7 +145,7 @@ f5_support_case_creation_api_tools/
 
 ## Individual Developer Scripts
 
-All 14 individual standalone scripts are maintained under [`examples/`](examples/README.md) (with backward-compatibility shims under `python/`) for custom integrations:
+All 14 individual standalone scripts are maintained under [`examples/`](examples/README.md) for custom integrations:
 
 - **BIG-IP Appliance Tools**: [`bigip_connectivity_test.py`](examples/bigip_connectivity_test.py), [`bigip_generate_qkview.py`](examples/bigip_generate_qkview.py), [`bigip_list_qkviews.py`](examples/bigip_list_qkviews.py), [`bigip_download_qkview.py`](examples/bigip_download_qkview.py), [`bigip_delete_qkview.py`](examples/bigip_delete_qkview.py).
 - **iHealth Tools**: [`ihealth_connectivity_test.py`](examples/ihealth_connectivity_test.py), [`ihealth_list_qkviews.py`](examples/ihealth_list_qkviews.py), [`ihealth_upload_qkview.py`](examples/ihealth_upload_qkview.py).

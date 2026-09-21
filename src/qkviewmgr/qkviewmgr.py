@@ -52,10 +52,18 @@ def cmd_auto_pilot(args):
 
     # Step 2: Generate QKView on appliance
     print(f"\n[2/5] Triggering QKView generation on appliance ({qkview_name})...")
-    f5functions.bigip_generate_qkview(
+    resp_gen = f5functions.bigip_generate_qkview(
         host, username, password, qkview_name,
         no_truncate=args.no_truncate, verify=verify_ssl
     )
+    if hasattr(resp_gen, "json") and callable(resp_gen.json):
+        try:
+            task_id = resp_gen.json().get("id")
+            if isinstance(task_id, str) and task_id:
+                print(f"      ... Waiting for generation task ({task_id}) to complete...")
+                f5functions.bigip_wait_for_qkview(host, username, password, task_id, verify=verify_ssl)
+        except Exception:
+            pass
     print("      ✓ Appliance finished QKView generation.")
 
     # Step 3: Download QKView
