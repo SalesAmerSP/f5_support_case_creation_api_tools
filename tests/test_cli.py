@@ -15,14 +15,14 @@ import qkviewmgr.qkviewmgr as qkviewmgr
 class TestCLIParser(unittest.TestCase):
     """Test CLI argument parsing for all subcommands and flags."""
 
-    @patch("qkviewmgr.qkviewmgr.cmd_doctor")
+    @patch.object(qkviewmgr, "cmd_doctor")
     def test_cli_doctor(self, mock_cmd):
         """Test 'qkviewmgr doctor' dispatch."""
         with patch.object(sys, "argv", ["qkviewmgr", "doctor"]):
             qkviewmgr.main()
         mock_cmd.assert_called_once()
 
-    @patch("qkviewmgr.qkviewmgr.cmd_bigip")
+    @patch.object(qkviewmgr, "cmd_bigip")
     def test_cli_bigip_test(self, mock_cmd):
         """Test 'qkviewmgr bigip --host 10.0.0.1 test' dispatch."""
         with patch.object(sys, "argv", ["qkviewmgr", "bigip", "--host", "10.0.0.1", "test"]):
@@ -32,7 +32,7 @@ class TestCLIParser(unittest.TestCase):
         self.assertEqual(args.host, "10.0.0.1")
         self.assertEqual(args.action, "test")
 
-    @patch("qkviewmgr.qkviewmgr.cmd_bigip")
+    @patch.object(qkviewmgr, "cmd_bigip")
     def test_cli_bigip_status(self, mock_cmd):
         """Test 'qkviewmgr bigip --host 10.0.0.1 status' dispatch."""
         with patch.object(sys, "argv", ["qkviewmgr", "bigip", "--host", "10.0.0.1", "status", "--no-ssl-verify"]):
@@ -43,7 +43,7 @@ class TestCLIParser(unittest.TestCase):
         self.assertEqual(args.action, "status")
         self.assertTrue(args.no_ssl_verify)
 
-    @patch("qkviewmgr.qkviewmgr.cmd_bigip")
+    @patch.object(qkviewmgr, "cmd_bigip")
     def test_cli_bigip_generate_wait(self, mock_cmd):
         """Test 'qkviewmgr bigip --host 10.0.0.1 generate --wait' dispatch."""
         with patch.object(
@@ -58,7 +58,7 @@ class TestCLIParser(unittest.TestCase):
         self.assertTrue(args.wait)
         self.assertEqual(args.wait_timeout, 120)
 
-    @patch("qkviewmgr.qkviewmgr.cmd_ihealth")
+    @patch.object(qkviewmgr, "cmd_ihealth")
     def test_cli_ihealth_list(self, mock_cmd):
         """Test 'qkviewmgr ihealth list' dispatch."""
         with patch.object(sys, "argv", ["qkviewmgr", "ihealth", "list"]):
@@ -67,7 +67,7 @@ class TestCLIParser(unittest.TestCase):
         args = mock_cmd.call_args[0][0]
         self.assertEqual(args.action, "list")
 
-    @patch("qkviewmgr.qkviewmgr.cmd_case")
+    @patch.object(qkviewmgr, "cmd_case")
     def test_cli_case_list(self, mock_cmd):
         """Test 'qkviewmgr case list' dispatch."""
         with patch.object(sys, "argv", ["qkviewmgr", "case", "list"]):
@@ -76,7 +76,7 @@ class TestCLIParser(unittest.TestCase):
         args = mock_cmd.call_args[0][0]
         self.assertEqual(args.action, "list")
 
-    @patch("qkviewmgr.qkviewmgr.cmd_auto_pilot")
+    @patch.object(qkviewmgr, "cmd_auto_pilot")
     def test_cli_run_auto(self, mock_cmd):
         """Test 'qkviewmgr run --host 10.0.0.1' dispatch."""
         with patch.object(sys, "argv", ["qkviewmgr", "run", "--host", "10.0.0.1", "--no-upload"]):
