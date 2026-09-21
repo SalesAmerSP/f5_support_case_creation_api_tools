@@ -27,6 +27,13 @@
 # Private certificates and keys
 *.pem
 *.key
+.ephemeral_id_rsa*
+id_rsa*
+id_ed25519*
+
+# F5 credentials files
+.ihealth_credentials
+*ihealth_credentials*
 
 # ------------------------------------------------------------------------------
 # Python Bytecode & Packaging

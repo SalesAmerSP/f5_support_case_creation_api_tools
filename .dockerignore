@@ -29,8 +29,13 @@ htmlcov
 .env.*
 *.pem
 *.key
-*.token
-~/.ihealth_credentials
+.ihealth_credentials
+*ihealth_credentials*
+.ephemeral_id_rsa*
+id_rsa*
+id_ed25519*
+scratch/
+scratch
 
 # Generated artifacts and dumps
 *.qkview

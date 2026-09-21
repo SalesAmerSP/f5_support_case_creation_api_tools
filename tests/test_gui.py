@@ -185,13 +185,11 @@ class TestGuiLogic(unittest.TestCase):
     @patch('qkviewmgr.f5functions.resolve_ihealth_credentials')
     @patch('qkviewmgr.f5functions.myf5_authenticate')
     @patch('qkviewmgr.f5functions.ihealth_connectivity_test')
-    def test_test_ihealth_success_200(self, mock_test, mock_auth, mock_creds):
-        """Verify _test_ihealth reports success on HTTP 200."""
+    def test_test_ihealth_success_bool(self, mock_test, mock_auth, mock_creds):
+        """Verify _test_ihealth reports success on boolean True return value."""
         mock_creds.return_value = ("client_id", "client_secret")
         mock_auth.return_value = "token_abc"
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_test.return_value = mock_resp
+        mock_test.return_value = True
 
         self.app._test_ihealth()
         self.assertTrue(any("✓ iHealth API connection and token verified" in msg for msg in self.app.logs))
@@ -199,13 +197,11 @@ class TestGuiLogic(unittest.TestCase):
     @patch('qkviewmgr.f5functions.resolve_ihealth_credentials')
     @patch('qkviewmgr.f5functions.myf5_authenticate')
     @patch('qkviewmgr.f5functions.myf5_connectivity_test')
-    def test_test_myf5_success_200(self, mock_test, mock_auth, mock_creds):
-        """Verify _test_myf5 reports success on HTTP 200."""
+    def test_test_myf5_success_bool(self, mock_test, mock_auth, mock_creds):
+        """Verify _test_myf5 reports success on boolean True return value."""
         mock_creds.return_value = ("client_id", "client_secret")
         mock_auth.return_value = "token_abc"
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_test.return_value = mock_resp
+        mock_test.return_value = True
 
         self.app._test_myf5()
         self.assertTrue(any("✓ MyF5 Support API connection and token verified" in msg for msg in self.app.logs))

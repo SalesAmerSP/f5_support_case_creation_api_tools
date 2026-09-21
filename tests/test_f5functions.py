@@ -268,6 +268,24 @@ class TestF5Functions(unittest.TestCase):
         self.assertIn('/mgmt/tm/util/qkview', args[0])
         self.assertEqual(kwargs['json']['command'], 'run')
 
+    def test_bigip_generate_qkview_invalid_filename_raises(self):
+        """Verify bigip_generate_qkview rejects filenames with shell injection characters."""
+        dangerous_names = [
+            "test.qkview; touch /tmp/pwned",
+            "test.qkview && rm -rf /",
+            "test.qkview | echo hacked",
+            "`id`.qkview",
+            "$(whoami).qkview",
+            "test\nname.qkview",
+            "../test.qkview",
+            "path/to/test.qkview",
+            "test qkview.qkview",
+        ]
+        for bad_name in dangerous_names:
+            with self.subTest(filename=bad_name):
+                with self.assertRaises(ValueError):
+                    f5functions.bigip_generate_qkview('host', 'user', 'pass', bad_name)
+
     @patch('f5functions.requests.get')
     def test_bigip_list_qkviews(self, mock_get):
         """Verify bigip_list_qkviews queries autodeploy endpoint."""

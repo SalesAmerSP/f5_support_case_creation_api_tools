@@ -41,7 +41,8 @@ def cmd_auto_pilot(args):
     password = f5functions.resolve_bigip_credentials(host, username, args.password)
     verify_ssl = not args.no_ssl_verify
 
-    qkview_name = args.qkview_name or f"{host.replace('.', '_')}_diag.qkview"
+    raw_name = args.qkview_name or f"{host.replace('.', '_')}_diag.qkview"
+    qkview_name = os.path.basename(raw_name)
     output_dir = args.output_dir or "."
     local_path = os.path.join(output_dir, qkview_name)
 

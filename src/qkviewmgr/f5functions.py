@@ -12,6 +12,7 @@ import configparser
 import getpass
 import logging
 import os
+import re
 import ssl
 import sys
 import uuid
@@ -598,20 +599,30 @@ def bigip_generate_qkview(host, username, password, filename, no_truncate=False,
 
     Returns:
         requests.Response: HTTP response containing task creation details.
+
+    Raises:
+        ValueError: If filename contains invalid characters or shell metacharacters.
     """
+    if not re.match(r'^[a-zA-Z0-9_.-]+$', filename):
+        raise ValueError(
+            f"Invalid QKView filename: '{filename}'. "
+            "Must contain only alphanumeric characters, underscores, hyphens, and dots."
+        )
+    safe_filename = filename
+
     if no_truncate:
         return _bigip_request(
             requests.post, host, '/mgmt/tm/util/qkview',
             username, password, verify=verify,
             headers={'content-type': 'application/json'},
-            json={'command': 'run', 'utilCmdArgs': f'-s0 -f {filename}'}
+            json={'command': 'run', 'utilCmdArgs': f'-s0 -f {safe_filename}'}
         )
     else:
         return _bigip_request(
             requests.post, host, '/mgmt/cm/autodeploy/qkview',
             username, password, verify=verify,
             headers={'content-type': 'application/json'},
-            json={'name': filename}
+            json={'name': safe_filename}
         )
 
 
@@ -781,10 +792,11 @@ def bigip_download_qkview(host, username, password, filename, local_filename=Non
     Raises:
         SystemExit: On missing Content-Range header or network failure.
     """
-    url = _bigip_url(host, f'/mgmt/cm/autodeploy/qkview-downloads/{filename}')
+    safe_remote = os.path.basename(filename)
+    url = _bigip_url(host, f'/mgmt/cm/autodeploy/qkview-downloads/{safe_remote}')
     if not verify:
         urllib3.disable_warnings(InsecureRequestWarning)
-    output_filename = os.path.basename(filename) if local_filename is None else local_filename
+    output_filename = os.path.normpath(safe_remote if local_filename is None else local_filename)
     out_dir = os.path.dirname(output_filename)
     if out_dir:
         os.makedirs(out_dir, exist_ok=True)

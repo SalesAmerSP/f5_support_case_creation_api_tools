@@ -367,10 +367,11 @@ class QKViewMgrApp(_BaseApp):
             token = f5functions.myf5_authenticate(f5functions.IHEALTH_APP_ID, cid, csec, scope="ihealth")
             self.log("✓ Authenticated to F5 Identity Services.")
             res = f5functions.ihealth_connectivity_test(token)
-            if res.status_code == 200:
+            if res is True or getattr(res, "status_code", None) == 200:
                 self.log("✓ iHealth API connection and token verified (HTTP 200 OK).")
             else:
-                self.log(f"✗ iHealth API returned HTTP {res.status_code}: {res.text}")
+                status_info = f" (HTTP {res.status_code})" if hasattr(res, "status_code") else ""
+                self.log(f"✗ iHealth API connection failed{status_info}.")
         except (Exception, SystemExit) as e:
             err_msg = str(e)
             if not err_msg and hasattr(e, "code"):
@@ -387,10 +388,11 @@ class QKViewMgrApp(_BaseApp):
             token = f5functions.myf5_authenticate(f5functions.MYF5_APP_ID, cid, csec, scope="myf5_scope")
             self.log("✓ Authenticated to F5 Identity Services.")
             res = f5functions.myf5_connectivity_test(token)
-            if res.status_code == 200:
+            if res is True or getattr(res, "status_code", None) == 200:
                 self.log("✓ MyF5 Support API connection and token verified (HTTP 200 OK).")
             else:
-                self.log(f"✗ MyF5 Support API returned HTTP {res.status_code}: {res.text}")
+                status_info = f" (HTTP {res.status_code})" if hasattr(res, "status_code") else ""
+                self.log(f"✗ MyF5 Support API connection failed{status_info}.")
         except (Exception, SystemExit) as e:
             err_msg = str(e)
             if not err_msg and hasattr(e, "code"):
