@@ -148,7 +148,7 @@ def run_doctor_wizard():
     session = f5functions.get_secure_session(verify=True)
     for name, url in endpoints:
         try:
-            r = session.get(url, timeout=5)
+            r = session.get(url, timeout=5, allow_redirects=False)
             print(f"✓ {name}: Reachable (HTTP {r.status_code})")
         except Exception as e:
             print(f"✗ {name}: Failed ({e})")

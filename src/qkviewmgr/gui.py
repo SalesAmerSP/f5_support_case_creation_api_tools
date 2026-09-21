@@ -475,7 +475,7 @@ class QKViewMgrApp(_BaseApp):
             ("MyF5 Support API", f5functions.MYF5_API_FQDN),
         ]:
             try:
-                r = session.get(f"https://{fqdn}", timeout=5)
+                r = session.get(f"https://{fqdn}", timeout=5, allow_redirects=False)
                 self.log(f"✓ {name} ({fqdn}): Reachable (HTTP {r.status_code})")
             except (Exception, SystemExit) as e:
                 err_msg = str(e)

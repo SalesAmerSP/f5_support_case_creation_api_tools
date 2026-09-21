@@ -119,7 +119,13 @@ f5_support_case_creation_api_tools/
 │   ├── ihealth_*.py          # Standalone iHealth utilities
 │   └── myf5_*.py             # Standalone MyF5 case utilities
 ├── python/                   # Backward-compatibility shims for legacy invocations
-├── tests/                    # Comprehensive unit tests (48/48 passing)
+├── tests/                    # Comprehensive unit & integration tests (96/96 passing)
+│   ├── test_f5functions.py   # Core API functions and credential resolution
+│   ├── test_qkviewmgr.py     # CLI dispatcher and command handlers
+│   ├── test_cli.py           # CLI argument parsing and flags
+│   ├── test_gui.py           # Headless GUI tests and signal handling
+│   ├── test_wizard.py        # Terminal wizard interaction tests
+│   └── test_live_integration.py # Live TMOS appliance integration tests
 ├── .github/                  # CI/CD, GHAS CodeQL, Dependabot, Container workflows
 │   └── workflows/
 │       ├── container.yml     # Multi-arch Docker build & push to GHCR
@@ -129,9 +135,10 @@ f5_support_case_creation_api_tools/
 │       └── dependency-review.yml # PR dependency review
 ├── Dockerfile                # Hardened unprivileged multi-arch container spec
 ├── .dockerignore             # Container build exclusion list
+├── .env.example              # Example environment configuration template
 ├── requirements.lock         # Cryptographically hash-pinned dependencies
 ├── requirements.txt          # Root dependency pointer
-└── pyproject.toml            # Project packaging specification
+└── pyproject.toml            # Project packaging & pytest configuration
 ```
 
 ---
@@ -150,8 +157,23 @@ See [`examples/README.md`](examples/README.md) for full descriptions and usage p
 
 ## Running Automated Tests
 
-Run the full unit test suite:
+Run the full automated test suite (96 tests passing across Python 3.10 through 3.14):
+
+### Inside the Execution Container:
 ```bash
+# Run full pytest suite inside the container
+podman exec -w /home/appuser/f5_support_case_creation_api_tools tmos-cert-lab pytest tests/ -v
+
+# Run system doctor pre-flight audit inside the container
+podman exec -w /home/appuser/f5_support_case_creation_api_tools tmos-cert-lab qkviewmgr doctor
+```
+
+### On Local Host / Virtual Environment:
+```bash
+# Run with pytest
+pytest tests/ -v
+
+# Or run with standard unittest discovery
 python3 -m unittest discover -s tests -v
 ```
 

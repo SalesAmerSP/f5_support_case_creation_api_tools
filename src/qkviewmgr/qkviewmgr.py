@@ -149,12 +149,39 @@ def cmd_bigip(args):
                 print(f"  Name: {it.get('name') or it.get('filename')} | ID: {it.get('id')} | Status: {it.get('status')}")
         else:
             print(f"Failed to list QKViews: HTTP {resp.status_code}: {resp.text}")
+    elif action == "status":
+        info = f5functions.bigip_get_system_info(host, username, password, verify=verify_ssl)
+        print("=" * 60)
+        print(f" BIG-IP System Information ({host})")
+        print("=" * 60)
+        print(f" Hostname      : {info.get('hostname')}")
+        print(f" Product       : {info.get('product')}")
+        print(f" Version       : {info.get('version')} (Build {info.get('build')})")
+        print(f" Edition       : {info.get('edition')}")
+        print(f" Failover State: {info.get('failover_state')}")
+        print("=" * 60)
     elif action == "generate":
-        f5functions.bigip_generate_qkview(
+        resp = f5functions.bigip_generate_qkview(
             host, username, password, args.filename,
             no_truncate=args.no_truncate, verify=verify_ssl
         )
-        print(f"✓ QKView '{args.filename}' generated successfully on {host}.")
+        if getattr(args, "wait", False):
+            task_id = resp.json().get("id") if hasattr(resp, "json") else None
+            if task_id:
+                print(f"✓ QKView generation initiated (task ID: {task_id}). Waiting for completion...")
+                def _cb(status, data):
+                    print(f"  ... QKView generation status: {status}")
+                f5functions.bigip_wait_for_qkview(
+                    host, username, password, task_id,
+                    timeout=getattr(args, "wait_timeout", 300),
+                    verify=verify_ssl,
+                    callback=_cb
+                )
+                print(f"✓ QKView '{args.filename}' generation SUCCEEDED on {host}.")
+            else:
+                print(f"✓ QKView '{args.filename}' generated successfully on {host}.")
+        else:
+            print(f"✓ QKView '{args.filename}' generated successfully on {host}.")
     elif action == "download":
         f5functions.bigip_download_qkview(host, username, password, args.filename, args.output, verify=verify_ssl)
         print(f"✓ QKView downloaded successfully to {args.output}.")
@@ -287,7 +314,7 @@ def cmd_doctor(args):
     all_ok = True
     for label, url in targets:
         try:
-            r = session.get(url, timeout=5)
+            r = session.get(url, timeout=5, allow_redirects=False)
             print(f"   ✓ {label} ({url}): Reachable (HTTP {r.status_code})")
         except Exception as e:
             all_ok = False
@@ -332,15 +359,16 @@ def main():
 
     # Subcommand: bigip
     bigip_parser = subparsers.add_parser("bigip", help="Direct BIG-IP appliance operations")
-    bigip_parser.add_argument("action", choices=["test", "list", "generate", "download", "delete"], help="BIG-IP operation")
+    bigip_parser.add_argument("action", choices=["test", "list", "status", "generate", "download", "delete"], help="BIG-IP operation")
     bigip_parser.add_argument("--host", required=True, help="BIG-IP hostname or IP address")
     bigip_parser.add_argument("--username", default=None, help="BIG-IP username (default: BIGIP_USERNAME env var or admin)")
-
     bigip_parser.add_argument("--password", default=None, help="BIG-IP password (optional)")
     bigip_parser.add_argument("--no-ssl-verify", action="store_true", help="Disable SSL certificate verification")
     bigip_parser.add_argument("--filename", default="test.qkview", help="QKView filename on BIG-IP")
     bigip_parser.add_argument("--output", default="test.qkview", help="Local output destination for download")
     bigip_parser.add_argument("--no-truncate", action="store_true", help="Generate complete QKView (-s0)")
+    bigip_parser.add_argument("--wait", action="store_true", help="Wait for QKView generation to complete on device")
+    bigip_parser.add_argument("--wait-timeout", type=int, default=300, help="Maximum seconds to wait for generation (default: 300)")
 
     # Subcommand: ihealth
     ihealth_parser = subparsers.add_parser("ihealth", help="F5 iHealth API operations")

@@ -93,16 +93,22 @@ Checks performed:
 ## 3. Direct BIG-IP Appliance Subcommands (`qkviewmgr bigip`)
 
 ```bash
+# Query appliance system info, software version, and HA failover state
+qkviewmgr bigip status --host 192.0.2.1 --no-ssl-verify
+
 # Test appliance reachability & system readiness
 qkviewmgr bigip test --host 192.0.2.1 --no-ssl-verify
 
 # List existing QKView files on the appliance (/var/tmp)
 qkviewmgr bigip list --host 192.0.2.1 --no-ssl-verify
 
-# Generate a QKView file on the appliance
+# Generate a QKView file on the appliance (asynchronous background generation)
 qkviewmgr bigip generate --host 192.0.2.1 --filename diag.qkview --no-truncate --no-ssl-verify
 
-# Download a QKView from the appliance
+# Generate a QKView and automatically poll until SUCCEEDED
+qkviewmgr bigip generate --host 192.0.2.1 --filename diag.qkview --wait --wait-timeout 300 --no-ssl-verify
+
+# Download a QKView from the appliance with real-time progress bar
 qkviewmgr bigip download --host 192.0.2.1 --filename diag.qkview --output ./diag.qkview --no-ssl-verify
 
 # Delete a QKView from appliance storage

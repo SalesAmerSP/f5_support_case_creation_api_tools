@@ -198,6 +198,159 @@ class TestQKViewMgr(unittest.TestCase):
 
         mock_comment.assert_called_once_with("dummy_token", "C123", "New notes")
 
+    @patch("f5functions.bigip_get_system_info")
+    @patch("f5functions.resolve_bigip_credentials", return_value="pw")
+    def test_cmd_bigip_status(self, mock_creds, mock_info):
+        """Verify bigip status action retrieves and displays system info."""
+        mock_info.return_value = {
+            "hostname": "bigip-a.lab",
+            "product": "BIG-IP",
+            "version": "17.1.3.5",
+            "build": "0.0.14",
+            "edition": "Point Release 5",
+            "failover_state": "active",
+        }
+        args = MagicMock()
+        args.action = "status"
+        args.host = "52.73.20.25"
+        args.username = "admin"
+        args.password = None
+        args.no_ssl_verify = True
+
+        with patch("sys.stdout"):
+            qkviewmgr.cmd_bigip(args)
+
+        mock_info.assert_called_once_with("52.73.20.25", "admin", "pw", verify=False)
+
+    @patch("f5functions.bigip_wait_for_qkview")
+    @patch("f5functions.bigip_generate_qkview")
+    @patch("f5functions.resolve_bigip_credentials", return_value="pw")
+    def test_cmd_bigip_generate_wait(self, mock_creds, mock_gen, mock_wait):
+        """Verify bigip generate with --wait flag invokes wait_for_qkview."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"id": "task-uuid-123"}
+        mock_gen.return_value = mock_resp
+
+        args = MagicMock()
+        args.action = "generate"
+        args.host = "52.73.20.25"
+        args.username = "admin"
+        args.password = None
+        args.no_ssl_verify = True
+        args.filename = "my.qkview"
+        args.no_truncate = False
+        args.wait = True
+        args.wait_timeout = 60
+
+        with patch("sys.stdout"):
+            qkviewmgr.cmd_bigip(args)
+
+        mock_gen.assert_called_once_with("52.73.20.25", "admin", "pw", "my.qkview", no_truncate=False, verify=False)
+        mock_wait.assert_called_once()
+
+    @patch("f5functions.bigip_download_qkview")
+    @patch("f5functions.resolve_bigip_credentials", return_value="pw")
+    def test_cmd_bigip_download(self, mock_creds, mock_down):
+        """Verify bigip download action invokes bigip_download_qkview."""
+        args = MagicMock()
+        args.action = "download"
+        args.host = "52.73.20.25"
+        args.username = "admin"
+        args.password = None
+        args.no_ssl_verify = True
+        args.filename = "my.qkview"
+        args.output = "local.qkview"
+
+        with patch("sys.stdout"):
+            qkviewmgr.cmd_bigip(args)
+
+        mock_down.assert_called_once_with("52.73.20.25", "admin", "pw", "my.qkview", "local.qkview", verify=False)
+
+    @patch("f5functions.bigip_delete_qkview")
+    @patch("f5functions.resolve_bigip_credentials", return_value="pw")
+    def test_cmd_bigip_delete(self, mock_creds, mock_del):
+        """Verify bigip delete action invokes bigip_delete_qkview."""
+        args = MagicMock()
+        args.action = "delete"
+        args.host = "52.73.20.25"
+        args.username = "admin"
+        args.password = None
+        args.no_ssl_verify = True
+        args.filename = "my.qkview"
+
+        with patch("sys.stdout"):
+            qkviewmgr.cmd_bigip(args)
+
+        mock_del.assert_called_once_with("52.73.20.25", "admin", "pw", "my.qkview", verify=False)
+
+    @patch("f5functions.resolve_ihealth_credentials", return_value=("cid", "csec"))
+    @patch("f5functions.myf5_authenticate", return_value="dummy_token")
+    @patch("f5functions.ihealth_show_qkview_metadata")
+    def test_cmd_ihealth_show(self, mock_show, mock_auth, mock_creds):
+        """Verify ihealth show action displays qkview metadata."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"id": "qv123", "status": "completed"}
+        mock_show.return_value = mock_resp
+
+        args = MagicMock()
+        args.action = "show"
+        args.qkview_id = "qv123"
+        args.app_id = None
+        args.client_id = None
+        args.client_secret = None
+        args.profile = None
+
+        with patch("sys.stdout"):
+            qkviewmgr.cmd_ihealth(args)
+
+        mock_show.assert_called_once_with("dummy_token", "qv123")
+
+    @patch("f5functions.resolve_ihealth_credentials", return_value=("cid", "csec"))
+    @patch("f5functions.myf5_authenticate", return_value="dummy_token")
+    @patch("f5functions.myf5_retrieve_case_creation_metadata")
+    def test_cmd_case_metadata(self, mock_meta, mock_auth, mock_creds):
+        """Verify case metadata retrieval."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"severities": ["Standard", "Urgent"]}
+        mock_meta.return_value = mock_resp
+
+        args = MagicMock()
+        args.action = "metadata"
+        args.app_id = None
+        args.client_id = None
+        args.client_secret = None
+        args.profile = None
+
+        with patch("sys.stdout"):
+            qkviewmgr.cmd_case(args)
+
+        mock_meta.assert_called_once_with("dummy_token")
+
+    @patch("f5functions.resolve_ihealth_credentials", return_value=("cid", "csec"))
+    @patch("f5functions.myf5_authenticate", return_value="dummy_token")
+    @patch("f5functions.myf5_create_new_support_case")
+    @patch("builtins.open", unittest.mock.mock_open(read_data='{"subject": "Network outage"}'))
+    def test_cmd_case_create(self, mock_create, mock_auth, mock_creds):
+        """Verify case creation from json file."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 201
+        mock_resp.json.return_value = {"data": {"caseNumber": "C999"}, "links": [{"href": "https://case/999"}]}
+        mock_create.return_value = mock_resp
+
+        args = MagicMock()
+        args.action = "create"
+        args.json_file = "case_spec.json"
+        args.app_id = None
+        args.client_id = None
+        args.client_secret = None
+        args.profile = None
+
+        with patch("sys.stdout"):
+            qkviewmgr.cmd_case(args)
+
+        mock_create.assert_called_once_with("dummy_token", {"subject": "Network outage"})
 
 
 if __name__ == "__main__":

@@ -205,9 +205,37 @@ class MultipartProgressStream:
         self.close()
 
 
-# ---------------------------------------------------------------------------
-# Shared argument parsers
-# ---------------------------------------------------------------------------
+def load_dotenv_if_present(dotenv_path=".env"):
+    """Load key-value pairs from a .env file into os.environ if not already defined.
+
+    Does not overwrite existing environment variables. Supports comments (#)
+    and single/double quoted values.
+    """
+    candidates = [
+        dotenv_path,
+        os.path.join(os.getcwd(), ".env"),
+    ]
+    for path in candidates:
+        if path and os.path.isfile(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith("#") or "=" not in line:
+                            continue
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip("'\"")
+                        if k and k not in os.environ:
+                            os.environ[k] = v
+                break
+            except Exception:
+                pass
+
+
+# Automatically load .env on module import
+load_dotenv_if_present()
+
 
 def resolve_bigip_username(username=None):
     """Resolve BIG-IP username safely from CLI argument, environment, or default.
@@ -624,6 +652,109 @@ def bigip_query_qkview_task(host, username, password, task_id, verify=True):
         username, password, verify=verify,
         headers={'accept': 'application/json'}
     )
+
+
+def bigip_wait_for_qkview(host, username, password, task_id, timeout=300, poll_interval=5, verify=True, callback=None):
+    """Poll a BIG-IP QKView generation task until completion, failure, or timeout.
+
+    Args:
+        host (str): BIG-IP hostname or IP address.
+        username (str): BIG-IP username.
+        password (str): BIG-IP password.
+        task_id (str): QKView generation task UUID.
+        timeout (int): Maximum seconds to wait (default: 300).
+        poll_interval (int): Polling interval in seconds (default: 5).
+        verify (bool): Whether to verify SSL certificates.
+        callback (callable, optional): Optional callback called with (status, task_data).
+
+    Returns:
+        dict: The final task state dictionary.
+
+    Raises:
+        TimeoutError: If task does not complete within timeout seconds.
+        RuntimeError: If task status reports FAILED or task cannot be queried.
+    """
+    import time
+    start = time.time()
+    last_status = None
+    while time.time() - start < timeout:
+        resp = bigip_query_qkview_task(host, username, password, task_id, verify=verify)
+        if resp.status_code != 200:
+            raise RuntimeError(f"Failed to query QKView task {task_id}: HTTP {resp.status_code} - {resp.text}")
+        task_data = resp.json()
+        status = task_data.get("status")
+        if status != last_status:
+            last_status = status
+            if callback:
+                callback(status, task_data)
+        if status == "SUCCEEDED":
+            return task_data
+        elif status == "FAILED":
+            err_msg = task_data.get("errorMessage") or "Unknown error"
+            raise RuntimeError(f"QKView generation failed on {host}: {err_msg}")
+        time.sleep(poll_interval)
+    raise TimeoutError(f"QKView generation on {host} timed out after {timeout} seconds (task ID: {task_id})")
+
+
+def bigip_get_system_info(host, username, password, verify=True):
+    """Retrieve comprehensive system hardware, version, hostname, and failover status.
+
+    Args:
+        host (str): BIG-IP hostname or IP.
+        username (str): BIG-IP username.
+        password (str): BIG-IP password.
+        verify (bool): Whether to verify SSL certificates.
+
+    Returns:
+        dict: System information dictionary with keys 'hostname', 'version', 'build', 'edition', 'failover_state'.
+    """
+    info = {
+        "host": host,
+        "hostname": host,
+        "product": "BIG-IP",
+        "version": "Unknown",
+        "build": "Unknown",
+        "edition": "Unknown",
+        "failover_state": "Unknown",
+    }
+    # 1. Hostname from global-settings
+    try:
+        r = _bigip_request(requests.get, host, '/mgmt/tm/sys/global-settings', username, password, verify=verify)
+        if r.status_code == 200:
+            info["hostname"] = r.json().get("hostname", host)
+    except Exception:
+        pass
+
+    # 2. Version from /mgmt/tm/sys/version
+    try:
+        r = _bigip_request(requests.get, host, '/mgmt/tm/sys/version', username, password, verify=verify)
+        if r.status_code == 200:
+            entries = r.json().get("entries", {})
+            for _, val in entries.items():
+                stats = val.get("nestedStats", {}).get("entries", {})
+                if "Version" in stats:
+                    info["version"] = stats["Version"].get("description", "Unknown")
+                if "Build" in stats:
+                    info["build"] = stats["Build"].get("description", "Unknown")
+                if "Edition" in stats:
+                    info["edition"] = stats["Edition"].get("description", "Unknown")
+                if "Product" in stats:
+                    info["product"] = stats["Product"].get("description", "BIG-IP")
+                break
+    except Exception:
+        pass
+
+    # 3. Failover state from /mgmt/tm/sys/failover
+    try:
+        r = _bigip_request(requests.get, host, '/mgmt/tm/sys/failover', username, password, verify=verify)
+        if r.status_code == 200:
+            raw = r.json().get("apiRawValues", {}).get("apiAnonymous", "").strip()
+            if raw:
+                info["failover_state"] = raw
+    except Exception:
+        pass
+
+    return info
 
 
 def bigip_download_qkview(host, username, password, filename, local_filename=None, verify=True):

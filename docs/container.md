@@ -103,3 +103,22 @@ docker build -t qkviewmgr:local .
 # Test local build
 docker run --rm qkviewmgr:local doctor
 ```
+
+---
+
+## 6. Running Pytest & Test Suites Inside Containers
+
+You can run the complete unit and live integration test suite directly inside your execution container:
+
+```bash
+# Using Podman in an execution container (e.g. tmos-cert-lab)
+podman exec -w /home/appuser/f5_support_case_creation_api_tools tmos-cert-lab pytest tests/ -v
+
+# Run system doctor diagnostics inside container
+podman exec -w /home/appuser/f5_support_case_creation_api_tools tmos-cert-lab qkviewmgr doctor
+
+# Using Docker with volume mount
+docker run --rm -v $(pwd):/workspace -w /workspace \
+  ghcr.io/salesamersp/f5_support_case_creation_api_tools:latest \
+  pytest tests/ -v
+```
