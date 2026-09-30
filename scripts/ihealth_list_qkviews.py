@@ -4,8 +4,8 @@
 Supports both Okta and Auth0 authentication endpoints (per K000162308).
 
 Usage:
-    python3 examples/ihealth_list_qkviews.py --client-id <id> --client-secret <secret> \
-        [--auth-fqdn idp.identity.f5.com] [--api-fqdn ihealth2-api.f5.com]
+    # Requires F5_CLIENT_ID & F5_CLIENT_SECRET in env or ~/.f5api_credentials
+    python3 scripts/ihealth_list_qkviews.py [--profile <profile>]
 """
 
 import datetime

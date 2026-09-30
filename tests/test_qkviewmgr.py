@@ -359,6 +359,20 @@ class TestQKViewMgr(unittest.TestCase):
 
         mock_create.assert_called_once_with("dummy_token", {"subject": "Network outage"})
 
+    def test_qkviewmgr_main_prohibits_client_secret(self):
+        """Verify qkviewmgr rejects --client-secret with exit code 2."""
+        with patch("sys.argv", ["qkviewmgr", "run", "--host", "10.0.0.1", "--client-secret", "supersecret"]):
+            with self.assertRaises(SystemExit) as cm:
+                qkviewmgr.main()
+            self.assertEqual(cm.exception.code, 2)
+
+    def test_qkviewmgr_main_prohibits_password(self):
+        """Verify qkviewmgr rejects --password with exit code 2."""
+        with patch("sys.argv", ["qkviewmgr", "bigip", "test", "--host", "10.0.0.1", "--password", "secretpw"]):
+            with self.assertRaises(SystemExit) as cm:
+                qkviewmgr.main()
+            self.assertEqual(cm.exception.code, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

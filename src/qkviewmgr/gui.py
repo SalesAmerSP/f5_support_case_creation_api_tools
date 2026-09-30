@@ -10,10 +10,7 @@ import signal
 import sys
 import threading
 
-try:
-    from . import f5functions
-except ImportError:
-    import f5functions
+import f5functions
 
 try:
     import tkinter as tk

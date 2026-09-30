@@ -22,7 +22,28 @@ Firewalls and enterprise proxy systems must permit outbound TCP traffic on **Por
 | **F5 iHealth Upload API (Primary)** | `ihealth2-api.f5.com` | `185.56.152.6` | QKView multipart upload and analysis metadata queries |
 | **F5 iHealth Upload API (Fallback)** | `ihealth-api.f5.com` | `185.56.152.6` | High-availability fallback endpoint if primary fails |
 | **MyF5 Support Case API** | `support.apis.f5.com` | `35.199.173.84` | Case creation, comment updates, and metadata schema |
+| **MyF5 Software Downloads API** | `api.software.downloads.f5.com` | AWS CloudFront / F5 XC Anycast | Catalog metadata, release versions, and signed download URLs (Effective Oct 2, 2026; no `k` param) |
 | **Local BIG-IP Appliance** | `<appliance-ip-or-fqdn>` | Local Subnet / Mgmt | Target appliance running TMOS iControl REST |
+
+---
+
+## Network & DNS Maintenance Advisories
+
+### 1. Friday, September 25, 2026: DNS Cutover to F5 Distributed Cloud (XC)
+- **Time Window**: Friday, September 25, starting at 9:00 AM PT for 2 hours (09:00 - 11:00 AM PT / 16:00 - 18:00 UTC).
+- **Scope & Actions**:
+  - DNS change for `callhome.f5.com` and `api.f5.com` pointing to F5 Distributed Cloud (XC).
+  - Wide IPs disabled for `callhome.f5.com` and `api.f5.com`, cutting over active traffic to XC.
+  - Live production traffic routed to new Enterprise Service Delivery Platform (ESDP) for 1 hour (9:00 - 10:00 AM PT).
+- **Service Availability**: Services **WILL be available** throughout the testing window.
+- **Affected Services**:
+  - `callhome.f5.com`: Used by BIG-IP, BIG-IQ, and all F5 appliances for phone-home and automated diagnostic telemetry.
+  - `api.f5.com`: Used by MyF5 RSS Feed, BIG-IP, BIG-IQ, and appliance license verification.
+
+### 2. Friday, October 2, 2026: Downloads API Base URL Migration
+- **Change**: MyF5 Software Downloads API moves permanently to `https://api.software.downloads.f5.com`.
+- **Action Required**: The legacy `k` query parameter is eliminated and will be rejected. All queries use OAuth2 Bearer token authentication only.
+- **Built-in Resilience**: Tools (`download_browser`, `qkviewmgr downloads`) automatically use `api.software.downloads.f5.com` without `k`, and gracefully fall back during the transition window.
 
 ---
 

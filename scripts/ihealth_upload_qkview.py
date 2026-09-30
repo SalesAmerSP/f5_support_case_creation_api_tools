@@ -2,8 +2,8 @@
 """Upload a local QKView file to F5 iHealth for analysis and case association.
 
 Usage:
-    python3 examples/ihealth_upload_qkview.py --client-id <id> --client-secret <secret> \
-        --filename diag.qkview [--support-case C12345] [--auth-fqdn idp.identity.f5.com]
+    # Requires F5_CLIENT_ID & F5_CLIENT_SECRET in env or ~/.f5api_credentials
+    python3 scripts/ihealth_upload_qkview.py --filename diag.qkview [--support-case C12345] [--profile <profile>]
 """
 
 import os

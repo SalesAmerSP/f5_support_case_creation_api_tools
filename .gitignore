@@ -3,17 +3,39 @@
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
-# F5 Domain Artifacts & Generated Files
+# F5 Domain Artifacts, Diagnostics & Downloaded Software Images
 # ------------------------------------------------------------------------------
 # BIG-IP diagnostic support bundles (contain sensitive configs, keys, and logs)
 *.qkview
 
-# Generated API case inputs and retrieved metadata JSON files
+# MyF5 Software Downloads & Virtual Edition Images (prevents multi-GB commits)
+*.iso
+*.img
+*.ova
+*.ovf
+*.qcow2
+*.qcow2.gz
+*.vhd
+*.vhdx
+*.vmdk
+*.tgz
+*.tar.gz
+*.tar
+*.zip
+*.rpm
+
+# Generated API case inputs, retrieved metadata, and local payload dumps
 *.json
-# Whitelist IDE configs, test fixtures, and JSON schemas
-!.vscode/*.json
+# Whitelist tracked repository specifications, schemas, IDE configs, examples, scripts, and test fixtures
+!openapi.json
+!examples/**/*.json
+!examples/*.json
+!scripts/**/*.json
+!scripts/*.json
 !tests/**/*.json
+!tests/*.json
 !*.schema.json
+!.vscode/*.json
 
 # ------------------------------------------------------------------------------
 # Secrets & Environment Configurations
@@ -27,13 +49,32 @@
 # Private certificates and keys
 *.pem
 *.key
+*.p12
+*.pfx
+*.pkcs12
 .ephemeral_id_rsa*
 id_rsa*
+id_dsa*
+id_ecdsa*
 id_ed25519*
 
-# F5 credentials files
+# F5 credentials files and local profile stores
 .ihealth_credentials
 *ihealth_credentials*
+.f5api_credentials
+*.f5api_credentials*
+*f5api_credentials*
+
+# General credential files (prevent accidental credentials commits while preserving docs)
+*credentials*.ini
+*credentials*.json
+*credentials*.txt
+*credentials*.yaml
+*credentials*.yml
+.credentials*
+*credentials*
+!*credentials*.md
+!docs/credentials.md
 
 # ------------------------------------------------------------------------------
 # Python Bytecode & Packaging
@@ -48,6 +89,7 @@ build/
 dist/
 *.egg-info/
 *.egg
+*.whl
 
 # Modern Virtual Environments
 .venv/
@@ -69,6 +111,7 @@ pip-audit-results.sarif
 .nox/
 .mypy_cache/
 .ruff_cache/
+.hypothesis/
 
 # ------------------------------------------------------------------------------
 # IDEs & Editors
@@ -95,9 +138,11 @@ pip-audit-results.sarif
 Thumbs.db
 [Dd]esktop.ini
 
-# General logs and editor swaps
+# General logs, editor swaps, and scratch space
 *.log
 *.tmp
 *.swp
+*.swo
 *~
+.#*
 scratch/

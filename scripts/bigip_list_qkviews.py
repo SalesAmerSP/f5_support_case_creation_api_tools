@@ -2,7 +2,8 @@
 """List completed QKViews present on an F5 BIG-IP device via iControl REST.
 
 Usage:
-    python3 examples/bigip_list_qkviews.py --host <ip> --username admin --password <pwd> [--no-ssl-verify]
+    # Set BIGIP_PASSWORD in env or enter when prompted
+    python3 scripts/bigip_list_qkviews.py --host <ip> [--username admin] [--no-ssl-verify]
 """
 
 from datetime import datetime

@@ -2,8 +2,8 @@
 """Append notes or comments to an existing MyF5 support case from a text file.
 
 Usage:
-    python3 examples/myf5_add_comments_to_existing_case.py --client-id <id> --client-secret <secret> \
-        --case-number C12345 --comment-text-file notes.txt [--auth-fqdn idp.identity.f5.com]
+    # Requires F5_CLIENT_ID & F5_CLIENT_SECRET in env or ~/.f5api_credentials
+    python3 scripts/myf5_add_comments_to_existing_case.py --case-number C12345 --comment-text-file notes.txt [--profile <profile>]
 """
 
 import os

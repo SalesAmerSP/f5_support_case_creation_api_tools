@@ -2,8 +2,8 @@
 """List existing support cases associated with your MyF5 account.
 
 Usage:
-    python3 examples/myf5_list_existing_cases.py --client-id <id> --client-secret <secret> \
-        [--show-closed] [--auth-fqdn idp.identity.f5.com]
+    # Requires F5_CLIENT_ID & F5_CLIENT_SECRET in env or ~/.f5api_credentials
+    python3 scripts/myf5_list_existing_cases.py [--profile <profile>] [--show-closed]
 """
 
 import os

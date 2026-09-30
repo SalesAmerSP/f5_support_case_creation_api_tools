@@ -9,10 +9,7 @@ import os
 import sys
 import time
 
-try:
-    from . import f5functions
-except ImportError:
-    import f5functions
+import f5functions
 
 
 def _prompt(prompt_text, default=None, secret=False):

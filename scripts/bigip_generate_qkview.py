@@ -2,7 +2,8 @@
 """Generate a QKView diagnostic archive on an F5 BIG-IP device via iControl REST.
 
 Usage:
-    python3 examples/bigip_generate_qkview.py --host <ip> --username admin --password <pwd> \
+    # Set BIGIP_PASSWORD in env or enter when prompted
+    python3 scripts/bigip_generate_qkview.py --host <ip> [--username admin] \
         --filename diag.qkview [--skip-wait] [--wait-interval 60] [--no-ssl-verify]
 """
 

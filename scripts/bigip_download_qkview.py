@@ -2,7 +2,8 @@
 """Download a QKView file from an F5 BIG-IP device using chunked streaming.
 
 Usage:
-    python3 examples/bigip_download_qkview.py --host <ip> --username admin --password <pwd> \
+    # Set BIGIP_PASSWORD in env or enter when prompted
+    python3 scripts/bigip_download_qkview.py --host <ip> [--username admin] \
         --filename diag.qkview [--no-ssl-verify]
 """
 

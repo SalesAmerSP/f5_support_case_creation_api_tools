@@ -2,8 +2,8 @@
 """Submit a new support case to MyF5 using a pre-generated JSON inputs file.
 
 Usage:
-    python3 examples/myf5_create_new_case.py --client-id <id> --client-secret <secret> \
-        --inputs-file case_inputs.json [--auth-fqdn idp.identity.f5.com]
+    # Requires F5_CLIENT_ID & F5_CLIENT_SECRET in env or ~/.f5api_credentials
+    python3 scripts/myf5_create_new_case.py --inputs-file case_inputs.json [--profile <profile>]
 """
 
 import json

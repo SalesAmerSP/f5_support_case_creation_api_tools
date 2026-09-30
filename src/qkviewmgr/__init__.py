@@ -2,7 +2,7 @@
 
 __version__ = "1.3.0"
 
-from . import f5functions
+import f5functions
 from . import gui
 from . import wizard
 from .qkviewmgr import (

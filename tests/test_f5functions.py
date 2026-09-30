@@ -45,8 +45,7 @@ _src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
 if _src_dir not in sys.path:
     sys.path.insert(0, _src_dir)
 
-import qkviewmgr.f5functions as f5functions
-sys.modules['f5functions'] = f5functions
+import f5functions
 
 
 
@@ -80,32 +79,36 @@ class TestF5Functions(unittest.TestCase):
     # Shared argument parsers
     # ---------------------------------------------------------------------------
 
+    @patch.dict(os.environ, {"BIGIP_PASSWORD": "secret"})
     def test_bigip_args_defaults(self):
         """Verify default argument parsing for BIG-IP CLI commands."""
-        with patch('sys.argv', ['prog', '--host', 'bigip1.example.com', '--password', 'secret']):
+        with patch('sys.argv', ['prog', '--host', 'bigip1.example.com']):
             args = f5functions.bigip_args()
             self.assertEqual(args.host, 'bigip1.example.com')
             self.assertEqual(args.username, 'admin')
             self.assertEqual(args.password, 'secret')
             self.assertFalse(args.no_ssl_verify)
 
+    @patch.dict(os.environ, {"BIGIP_PASSWORD": "pw"})
     def test_bigip_args_no_ssl_verify(self):
         """Verify --no-ssl-verify flag sets no_ssl_verify to True."""
-        with patch('sys.argv', ['prog', '--host', 'bigip1', '--password', 'pw', '--no-ssl-verify']):
+        with patch('sys.argv', ['prog', '--host', 'bigip1', '--no-ssl-verify']):
             args = f5functions.bigip_args()
             self.assertTrue(args.no_ssl_verify)
 
+    @patch.dict(os.environ, {"BIGIP_PASSWORD": "p"})
     def test_bigip_args_extra_args(self):
         """Verify passing extra tool-specific arguments to bigip_args."""
-        with patch('sys.argv', ['prog', '--host', 'h', '--password', 'p', '--filename', 'test.qkview']):
+        with patch('sys.argv', ['prog', '--host', 'h', '--filename', 'test.qkview']):
             args = f5functions.bigip_args(
                 (["--filename"], {"type": str, "help": "file", "required": True}),
             )
             self.assertEqual(args.filename, 'test.qkview')
 
+    @patch.dict(os.environ, {"F5_CLIENT_ID": "cid", "F5_CLIENT_SECRET": "csec"})
     def test_ihealth_args_defaults(self):
         """Verify default argument parsing for iHealth CLI commands."""
-        with patch('sys.argv', ['prog', '--client-id', 'cid', '--client-secret', 'csec']):
+        with patch('sys.argv', ['prog']):
             args = f5functions.ihealth_args()
             self.assertEqual(args.client_id, 'cid')
             self.assertEqual(args.client_secret, 'csec')
@@ -114,9 +117,10 @@ class TestF5Functions(unittest.TestCase):
             self.assertEqual(args.auth_fqdn, f5functions.IDENTITY_API_FQDN)
             self.assertEqual(args.api_fqdn, f5functions.IHEALTH_API_FQDN)
 
+    @patch.dict(os.environ, {"F5_CLIENT_ID": "cid", "F5_CLIENT_SECRET": "csec"})
     def test_myf5_args_defaults(self):
         """Verify default argument parsing for MyF5 CLI commands."""
-        with patch('sys.argv', ['prog', '--client-id', 'cid', '--client-secret', 'csec']):
+        with patch('sys.argv', ['prog']):
             args = f5functions.myf5_args()
             self.assertEqual(args.client_id, 'cid')
             self.assertEqual(args.client_secret, 'csec')
@@ -125,6 +129,20 @@ class TestF5Functions(unittest.TestCase):
             self.assertIsNone(args.auth_url)
             self.assertEqual(args.auth_fqdn, f5functions.IDENTITY_API_FQDN)
             self.assertEqual(args.api_url, f5functions.MYF5_API_FQDN)
+
+    def test_cli_secret_prohibited_client_secret(self):
+        """Verify passing --client-secret is prohibited and exits with code 2."""
+        with patch('sys.argv', ['prog', '--client-secret', 'leaked_secret']):
+            with self.assertRaises(SystemExit) as cm:
+                f5functions.check_no_cli_secrets()
+            self.assertEqual(cm.exception.code, 2)
+
+    def test_cli_secret_prohibited_password(self):
+        """Verify passing --password is prohibited and exits with code 2."""
+        with patch('sys.argv', ['prog', '--password', 'leaked_password']):
+            with self.assertRaises(SystemExit) as cm:
+                f5functions.check_no_cli_secrets()
+            self.assertEqual(cm.exception.code, 2)
 
     # ---------------------------------------------------------------------------
     # Credential Resolution & Zero Secret CLI tests
@@ -180,15 +198,23 @@ class TestF5Functions(unittest.TestCase):
         self.assertEqual(cid, "env_id")
         self.assertEqual(csec, "env_sec")
 
-    @patch('os.path.isfile', side_effect=lambda p: p.endswith('.ihealth_credentials'))
-    def test_resolve_ihealth_credentials_file(self, mock_isfile):
-        """Verify resolve_ihealth_credentials parses ~/.ihealth_credentials file."""
-        mock_ini = "[g.robinson@f5.com]\nclientid = file_id\nclientsecret = file_sec\n"
+    @patch('os.path.isfile', side_effect=lambda p: p.endswith('.f5api_credentials'))
+    def test_resolve_ihealth_credentials_f5api_file(self, mock_isfile):
+        """Verify resolve_ihealth_credentials parses ~/.f5api_credentials KEY=VALUE file."""
+        mock_env = "client_id=f5_api_id\nclient_secret=f5_api_sec\n"
         with patch.dict(os.environ, {}, clear=True):
-            with patch('builtins.open', mock_open(read_data=mock_ini)):
+            with patch('builtins.open', mock_open(read_data=mock_env)):
                 cid, csec = f5functions.resolve_ihealth_credentials()
-                self.assertEqual(cid, "file_id")
-                self.assertEqual(csec, "file_sec")
+                self.assertEqual(cid, "f5_api_id")
+                self.assertEqual(csec, "f5_api_sec")
+
+    @patch('os.path.isfile', return_value=False)
+    def test_resolve_ihealth_credentials_missing_raises(self, mock_isfile):
+        """Verify resolve_ihealth_credentials exits with code 1 when no credentials found in env or files."""
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(SystemExit) as cm:
+                f5functions.resolve_ihealth_credentials()
+            self.assertEqual(cm.exception.code, 1)
 
     # ---------------------------------------------------------------------------
     # Auth helper

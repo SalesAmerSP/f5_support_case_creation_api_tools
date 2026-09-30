@@ -32,6 +32,7 @@ dependencies = [
 
 [project.scripts]
 qkviewmgr = "qkviewmgr.qkviewmgr:main"
+download_browser = "download_browser:main"
 
 [project.optional-dependencies]
 dev = [
@@ -45,6 +46,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
+pythonpath = ["src"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

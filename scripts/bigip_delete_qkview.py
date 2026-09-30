@@ -2,7 +2,8 @@
 """Delete a QKView diagnostic file from an F5 BIG-IP device via iControl REST.
 
 Usage:
-    python3 examples/bigip_delete_qkview.py --host <ip> --username admin --password <pwd> \
+    # Set BIGIP_PASSWORD in env or enter when prompted
+    python3 scripts/bigip_delete_qkview.py --host <ip> [--username admin] \
         --filename diag.qkview [--no-ssl-verify]
 """
 

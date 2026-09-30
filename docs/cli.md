@@ -55,7 +55,6 @@ qkviewmgr run \
 | :--- | :--- | :--- |
 | `--host` | Target BIG-IP hostname or IP address *(Required)* | — |
 | `--username` | BIG-IP admin username | `$BIGIP_USERNAME` or `'admin'` |
-| `--password` | BIG-IP password (emits security warning if passed on CLI) | `$BIGIP_PASSWORD` or masked prompt |
 | `--no-ssl-verify` | Disable SSL validation for lab devices with self-signed certificates | `False` (SSL verified) |
 | `--qkview-name` | Custom name for the generated QKView archive | `<host>_diag.qkview` |
 | `--no-truncate` | Pass `-s0` to qkview to prevent truncation of large log files | `False` |
@@ -65,9 +64,10 @@ qkviewmgr run \
 | `--case-number` | Associate iHealth upload with existing MyF5 case | `None` |
 | `--description` | Descriptive title for iHealth upload | `None` |
 | `--no-wait` | Exit immediately after upload without polling for analysis completion | `False` (polls until complete) |
-| `--client-id` | F5 Identity Client ID | `$F5_CLIENT_ID` or `~/.ihealth_credentials` |
-| `--client-secret` | F5 Identity Client Secret | `$F5_CLIENT_SECRET` or `~/.ihealth_credentials` |
-| `--profile` | Configuration section in `~/.ihealth_credentials` | `'default'` |
+| `--profile` | Configuration profile in `~/.f5api_credentials` | `'default'` |
+
+> [!NOTE]
+> BIG-IP password is read from `$BIGIP_PASSWORD` or prompted interactively. F5 API credentials are read from `$F5_CLIENT_ID` / `$F5_CLIENT_SECRET` or `~/.f5api_credentials`. Secrets are strictly prohibited from CLI arguments.
 
 ---
 

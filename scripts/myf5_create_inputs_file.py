@@ -5,8 +5,8 @@ Fetches dynamic metadata (products, versions, severities, timezones) from MyF5
 to ensure user inputs are schema-compliant before submitting a case.
 
 Usage:
-    python3 examples/myf5_create_inputs_file.py --client-id <id> --client-secret <secret> \
-        --output-file case_inputs.json [--auth-fqdn idp.identity.f5.com]
+    # Requires F5_CLIENT_ID & F5_CLIENT_SECRET in env or ~/.f5api_credentials
+    python3 scripts/myf5_create_inputs_file.py --output-file case_inputs.json [--profile <profile>]
 """
 
 import json

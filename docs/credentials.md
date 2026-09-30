@@ -6,36 +6,38 @@ This guide explains how credentials and API secrets are securely handled in `qkv
 
 ## Security Philosophy: Zero Plaintext Secrets in CLI Arguments
 
-Passing passwords or API keys as command-line arguments is insecure for production and multi-user environments:
+Passing passwords or API keys as command-line arguments is strictly prohibited:
 - Secrets appear in plain text in process listings (`ps aux`, `/proc/<pid>/cmdline`).
 - Secrets are persisted to shell history files (`~/.bash_history`, `~/.zsh_history`).
 - Secrets can be logged by endpoint detection and response (EDR) agents or system audit daemons (`auditd`).
 
 > [!IMPORTANT]
-> `qkviewmgr` enforces **Zero-Secret CLI Operations**. If `--password`, `--client-id`, or `--client-secret` is passed via CLI arguments, a security warning is emitted to alert the operator to the process-listing risk.
+> `qkviewmgr` and all bundled utilities enforce **Zero-Secret CLI Security**. If `--password`, `--client-id`, `--client-secret`, or related secret flags are passed on the command line, execution is immediately halted with exit code 2 and a security advisory is printed.
 
 ---
 
-## Supported Authentication Methods
+## Required Authentication Methods
 
-All tools resolve credentials through a prioritized hierarchy:
-1. **Command-line arguments** (supported for legacy workflows, but emits a security warning)
-2. **Environment variables** (ideal for CI/CD pipelines, containerized deployments, and automation)
-3. **Local profile file** (`~/.ihealth_credentials` mode `0600`)
-4. **Interactive masked prompts** (`getpass`)
+All tools require credentials to be stored in **environment variables** or **configuration files**:
+
+1. **Environment Variables**: Best for CI/CD pipelines, containerized deployments, and automation.
+2. **Credential Files**: Best for local developer workstations:
+   - Primary: `~/.f5api_credentials` (mode `0600`)
+   - Fallback: `~/.ihealth_credentials`
+3. **Interactive Masked Prompts**: Fallback for appliance passwords via `getpass`.
 
 ---
 
 ### Method 1: Environment Variables (Recommended for Automation)
 
-Export the desired environment variables in your shell profile or pipeline runner:
+Export the credentials in your shell environment or CI/CD runner:
 
 ```bash
 # BIG-IP Appliance Credentials
 export BIGIP_USERNAME="admin"
 export BIGIP_PASSWORD="YourAppliancePassword"
 
-# F5 Cloud / iHealth / MyF5 API Credentials
+# F5 Cloud / iHealth / MyF5 / Downloads API Credentials
 export F5_CLIENT_ID="YourF5SupportAPIClientID"
 export F5_CLIENT_SECRET="YourF5SupportAPIClientSecret"
 
@@ -49,36 +51,45 @@ export F5_MYF5_API_K_VALUE="UKKD3Vxv7NHrM3QmYk8Fk2mZnLtljAKX"
 | :--- | :--- | :--- | :--- |
 | `BIGIP_USERNAME` | `BIGIP_USER`, `F5_USERNAME` | Username for target BIG-IP appliance | `'admin'` |
 | `BIGIP_PASSWORD` | `F5_PASSWORD` | Password for target BIG-IP appliance | Interactive prompt |
-| `F5_CLIENT_ID` | `IHEALTH_CLIENT_ID` | OAuth2 Client ID for F5 Identity Services | Interactive prompt / config file |
-| `F5_CLIENT_SECRET` | `IHEALTH_CLIENT_SECRET` | OAuth2 Client Secret for F5 Identity Services | Interactive prompt / config file |
+| `F5_CLIENT_ID` | `IHEALTH_CLIENT_ID` | OAuth2 Client ID for F5 Identity Services | Read from `~/.f5api_credentials` |
+| `F5_CLIENT_SECRET` | `IHEALTH_CLIENT_SECRET` | OAuth2 Client Secret for F5 Identity Services | Read from `~/.f5api_credentials` |
 | `F5_MYF5_API_K_VALUE`| `MYF5_K_VALUE` | Query parameter authorization key for MyF5 API | Built-in production key |
 
 ---
 
-### Method 2: Credential Profile File (`~/.ihealth_credentials`)
+### Method 2: Primary Credential File (`~/.f5api_credentials`)
 
-For persistent local developer workstations, store credentials in an INI-formatted file at `~/.ihealth_credentials`.
+Store your F5 API credentials in `~/.f5api_credentials`. This file supports simple `KEY=VALUE` formatting or INI profile sections:
 
+**Simple format (`KEY=VALUE`):**
+```bash
+username=g.robinson@f5.com
+client_id=YourF5SupportAPIClientID
+client_secret=YourF5SupportAPIClientSecret
+```
+
+**INI Profile format:**
 ```ini
 [default]
-clientid = YourF5SupportAPIClientID
-clientsecret = YourF5SupportAPIClientSecret
+client_id = YourF5SupportAPIClientID
+client_secret = YourF5SupportAPIClientSecret
 
 [production]
-clientid = ProdF5SupportAPIClientID
-clientsecret = ProdF5SupportAPIClientSecret
+client_id = ProdF5SupportAPIClientID
+client_secret = ProdF5SupportAPIClientSecret
 ```
 
 #### Restrict Permissions
-Ensure the file is readable only by your user account:
+Ensure your credentials file is readable only by your user account:
 ```bash
-chmod 0600 ~/.ihealth_credentials
+chmod 0600 ~/.f5api_credentials
 ```
 
 #### Selecting Profiles
 Specify an alternate profile using the `--profile` option:
 ```bash
 qkviewmgr ihealth list --profile production
+download_browser families --profile production
 ```
 
 ---

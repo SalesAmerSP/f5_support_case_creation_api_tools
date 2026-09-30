@@ -1,10 +1,12 @@
-# F5 Automation Developer Examples & Workflow Integration Scripts
+# F5 Automation Developer Scripts & Workflow Integration Utilities
 
-This directory contains standalone, single-purpose Python scripts demonstrating how to interact directly with F5 BIG-IP iControl REST, F5 iHealth, and MyF5 Support Case APIs.
+This directory contains standalone, single-purpose Python scripts demonstrating how to interact directly with F5 BIG-IP iControl REST, F5 iHealth, MyF5 Support Case, and MyF5 Software Downloads APIs.
 
 These scripts are designed for:
 1. **Direct execution**: Run them as standalone utilities from the command line.
 2. **Integration blueprints**: Copy and adapt individual functions and patterns into your enterprise automation pipelines (e.g., Ansible, Jenkins, GitHub Actions, custom monitoring daemons).
+
+All scripts import shared functions from [`src/f5functions.py`](../src/f5functions.py).
 
 ---
 
@@ -19,7 +21,7 @@ All example scripts inherit **Zero-Secret CLI Security**:
   export F5_CLIENT_ID="<your-client-id>"
   export F5_CLIENT_SECRET="<your-client-secret>"
   ```
-- Or configure `~/.ihealth_credentials` (mode `0600`).
+- Or configure `~/.f5api_credentials` or `~/.ihealth_credentials` (mode `0600`).
 
 ---
 
@@ -45,21 +47,28 @@ All example scripts inherit **Zero-Secret CLI Security**:
 - [`myf5_list_existing_cases.py`](myf5_list_existing_cases.py): Lists active (or all) support cases opened under the account.
 - [`myf5_add_comments_to_existing_case.py`](myf5_add_comments_to_existing_case.py): Appends text comments, diagnostics, or notes to an existing support ticket.
 
+### 4. MyF5 Software Catalog & Image Downloads (`download_browser.py`)
+- [`download_browser.py`](download_browser.py): Interactive menu-driven catalog browser and scriptable CLI downloader for BIG-IP, BIG-IQ, F5OS, and NGINX images, supporting streaming multi-mirror downloads, `tqdm` progress, and real-time SHA-256/MD5 validation. Also registered as global CLI command `download_browser`.
+
 ---
 
 ## Example Usage
 
 ### Test BIG-IP Connectivity
 ```bash
-python3 examples/bigip_connectivity_test.py --host 18.210.113.51 --no-ssl-verify
+python3 scripts/bigip_connectivity_test.py --host 192.0.2.1 --no-ssl-verify
 ```
 
-### List iHealth Diagnostics
+### Run Software Catalog Browser
 ```bash
-python3 examples/ihealth_list_qkviews.py
-```
+# Interactive menu browser
+python3 scripts/download_browser.py
 
-### List Support Cases
-```bash
-python3 examples/myf5_list_existing_cases.py
+# CLI commands
+download_browser status
+download_browser families
+download_browser lines --family BIG-IP
+download_browser versions --family BIG-IP --line big-ip_v16.x
+download_browser files --family BIG-IP --line big-ip_v16.x --version 16.1.6
+download_browser get --family BIG-IP --line big-ip_v16.x --version 16.1.6 --file BIGIP-16.1.6-0.0.12.iso
 ```

@@ -2,7 +2,8 @@
 """Test connectivity and system readiness to an F5 BIG-IP device via iControl REST.
 
 Usage:
-    python3 examples/bigip_connectivity_test.py --host <ip> --username admin --password <pwd> [--no-ssl-verify]
+    # Set BIGIP_PASSWORD in env or enter when prompted
+    python3 scripts/bigip_connectivity_test.py --host <ip> [--username admin] [--no-ssl-verify]
 """
 
 import os

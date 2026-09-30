@@ -16,12 +16,16 @@ import ssl
 import sys
 import time
 
+_src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
+
+import f5functions
+
 try:
-    from . import f5functions
     from . import wizard
     from . import gui
 except ImportError:
-    import f5functions
     import wizard
     import gui
 
@@ -38,7 +42,7 @@ def cmd_auto_pilot(args):
 
     host = args.host
     username = f5functions.resolve_bigip_username(args.username)
-    password = f5functions.resolve_bigip_credentials(host, username, args.password)
+    password = f5functions.resolve_bigip_credentials(host, username, getattr(args, "password", None))
     verify_ssl = not args.no_ssl_verify
 
     raw_name = args.qkview_name or f"{host.replace('.', '_')}_diag.qkview"
@@ -86,8 +90,11 @@ def cmd_auto_pilot(args):
 
     # Step 5: iHealth Upload & Tracking
     if not args.no_upload:
-        print(f"\n[5/5] Streaming QKView to F5 iHealth over TLS 1.3...")
-        cid, csec = f5functions.resolve_ihealth_credentials(args.client_id, args.client_secret, args.profile)
+        cid, csec = f5functions.resolve_ihealth_credentials(
+            client_id=getattr(args, "client_id", None),
+            client_secret=getattr(args, "client_secret", None),
+            profile=getattr(args, "profile", None)
+        )
         token = f5functions.myf5_authenticate(f5functions.IHEALTH_APP_ID, cid, csec, scope="ihealth")
         resp = f5functions.ihealth_upload_qkview(
             token, local_path,
@@ -140,7 +147,7 @@ def cmd_bigip(args):
     action = args.action
     host = args.host
     username = f5functions.resolve_bigip_username(args.username)
-    password = f5functions.resolve_bigip_credentials(host, username, args.password)
+    password = f5functions.resolve_bigip_credentials(host, username, getattr(args, "password", None))
     verify_ssl = not args.no_ssl_verify
 
     if action == "test":
@@ -206,8 +213,12 @@ def cmd_bigip(args):
 
 def cmd_ihealth(args):
     action = args.action
-    cid, csec = f5functions.resolve_ihealth_credentials(args.client_id, args.client_secret, args.profile)
-    token = f5functions.myf5_authenticate(args.app_id or f5functions.IHEALTH_APP_ID, cid, csec, scope="ihealth")
+    cid, csec = f5functions.resolve_ihealth_credentials(
+        client_id=getattr(args, "client_id", None),
+        client_secret=getattr(args, "client_secret", None),
+        profile=getattr(args, "profile", None)
+    )
+    token = f5functions.myf5_authenticate(getattr(args, "app_id", None) or f5functions.IHEALTH_APP_ID, cid, csec, scope="ihealth")
 
     if action == "test":
         f5functions.ihealth_connectivity_test(token)
@@ -233,8 +244,12 @@ def cmd_ihealth(args):
 
 def cmd_case(args):
     action = args.action
-    cid, csec = f5functions.resolve_ihealth_credentials(args.client_id, args.client_secret, args.profile)
-    token = f5functions.myf5_authenticate(args.app_id or f5functions.MYF5_APP_ID, cid, csec, scope="myf5_scope")
+    cid, csec = f5functions.resolve_ihealth_credentials(
+        client_id=getattr(args, "client_id", None),
+        client_secret=getattr(args, "client_secret", None),
+        profile=getattr(args, "profile", None)
+    )
+    token = f5functions.myf5_authenticate(getattr(args, "app_id", None) or f5functions.MYF5_APP_ID, cid, csec, scope="myf5_scope")
 
     if action == "list":
         resp = f5functions.myf5_list_support_cases(token)
@@ -272,6 +287,174 @@ def cmd_case(args):
 
 
 # ---------------------------------------------------------------------------
+# MyF5 Software Downloads Handlers (api.software.downloads.f5.com)
+# ---------------------------------------------------------------------------
+
+def cmd_downloads(args):
+    """Handle MyF5 Downloads API operations (metadata, versions, links, get)."""
+    action = args.action
+    api_fqdn = getattr(args, "api_fqdn", f5functions.MYF5_DOWNLOADS_API_FQDN)
+
+    # Direct URL download bypasses API auth
+    if action == "get" and getattr(args, "url", None):
+        output_file = args.output or os.path.basename(args.url.split("?")[0]) or "downloaded_image.iso"
+        checksum_algo = getattr(args, "checksum_algo", "sha256")
+        expected_checksum = getattr(args, "checksum", None)
+        print(f"Initiating direct streaming download of {os.path.basename(output_file)}...")
+        try:
+            saved_path = f5functions.myf5_download_file(
+                args.url,
+                output_file,
+                expected_checksum=expected_checksum,
+                checksum_algo=checksum_algo,
+            )
+            print(f"✓ Download completed and verified: {saved_path}")
+            return
+        except ValueError as ve:
+            print(f"✗ Checksum verification FAILED: {ve}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"✗ Download failed: {e}")
+            sys.exit(1)
+
+    cid, csec = f5functions.resolve_ihealth_credentials(
+        client_id=getattr(args, "client_id", None),
+        client_secret=getattr(args, "client_secret", None),
+        profile=getattr(args, "profile", None)
+    )
+    token = f5functions.myf5_authenticate(getattr(args, "app_id", None) or f5functions.MYF5_APP_ID, cid, csec, scope="myf5_scope")
+
+    if action in ("metadata", "list-products"):
+        resp = f5functions.myf5_get_downloads_metadata(token, api_fqdn=api_fqdn)
+        if resp.status_code == 200:
+            data = resp.json()
+            if getattr(args, "json", False):
+                print(json.dumps(data, indent=2))
+                return
+            families = data.get("data", {}).get("productFamilies", [])
+            if not families and isinstance(data, list):
+                families = data
+            print(f"Available Product Families and Lines ({api_fqdn}):")
+            for fam in families:
+                print(f"\nProduct Family: {fam.get('name')}")
+                for pl in fam.get("productLines", []):
+                    print(f"  - {pl.get('name'):25} | {pl.get('displayName')}")
+        else:
+            print(f"Failed to retrieve downloads metadata: HTTP {resp.status_code}: {resp.text}")
+            sys.exit(1)
+
+    elif action == "versions":
+        if not args.product_family or not args.product_line:
+            print("Error: --product-family and --product-line are required for 'versions' action.")
+            sys.exit(1)
+        resp = f5functions.myf5_get_product_versions(token, args.product_family, args.product_line, api_fqdn=api_fqdn)
+        if resp.status_code == 200:
+            data = resp.json()
+            if getattr(args, "json", False):
+                print(json.dumps(data, indent=2))
+                return
+            containers = data.get("data", {}).get("containers", [])
+            print(f"Product: {args.product_family} / {args.product_line}")
+            for c in containers:
+                cname = c.get("containerName", "N/A")
+                rel_date = c.get("releaseDate", "N/A")
+                print(f"\nContainer: {cname} (Released: {rel_date})")
+                files = c.get("files", [])
+                for f in files:
+                    fname = f.get("name") or f.get("fileName")
+                    fbytes = f.get("bytes") or "N/A"
+                    print(f"  - {fname} ({fbytes} bytes)")
+        else:
+            print(f"Failed to retrieve product versions: HTTP {resp.status_code}: {resp.text}")
+            sys.exit(1)
+
+    elif action == "links":
+        missing = [arg for arg in ("product_family", "product_line", "product_version", "container", "file_name") if not getattr(args, arg, None)]
+        if missing:
+            print(f"Error: Missing required argument(s) for 'links': {', '.join(missing)}")
+            sys.exit(1)
+        resp = f5functions.myf5_get_download_file_links(
+            token,
+            args.product_family,
+            args.product_line,
+            args.product_version,
+            args.container,
+            args.file_name,
+            language=getattr(args, "language", "english"),
+            api_fqdn=api_fqdn,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if getattr(args, "json", False):
+                print(json.dumps(data, indent=2))
+                return
+            links_data = data.get("data", {})
+            links = links_data.get("downloadLinks", [])
+            print(f"Download Links for {args.file_name}:")
+            for lnk in links:
+                print(f"  Region : {lnk.get('title')}")
+                print(f"  URL    : {lnk.get('href')}\n")
+            meta = links_data.get("meta", {})
+            for h in ("sha256", "md5", "sha1", "sha384", "sha512"):
+                if meta.get(h):
+                    print(f"  {h.upper()}: {meta.get(h)}")
+        else:
+            print(f"Failed to retrieve download links: HTTP {resp.status_code}: {resp.text}")
+            sys.exit(1)
+
+    elif action == "get":
+        missing = [arg for arg in ("product_family", "product_line", "product_version", "container", "file_name") if not getattr(args, arg, None)]
+        if missing:
+            print(f"Error: Missing required argument(s) for 'get': {', '.join(missing)} (or provide --url)")
+            sys.exit(1)
+        resp = f5functions.myf5_get_download_file_links(
+            token,
+            args.product_family,
+            args.product_line,
+            args.product_version,
+            args.container,
+            args.file_name,
+            language=getattr(args, "language", "english"),
+            api_fqdn=api_fqdn,
+        )
+        if resp.status_code != 200:
+            print(f"Failed to retrieve download links: HTTP {resp.status_code}: {resp.text}")
+            sys.exit(1)
+        data = resp.json()
+        links_data = data.get("data", {})
+        links = links_data.get("downloadLinks", [])
+        if not links:
+            print("No download links found in API response.")
+            sys.exit(1)
+        download_url = links[0].get("href")
+        output_file = args.output or args.file_name
+        checksum_algo = getattr(args, "checksum_algo", "sha256")
+        expected_checksum = args.checksum
+        if not expected_checksum:
+            meta = links_data.get("meta", {})
+            expected_checksum = meta.get(checksum_algo.lower()) or data.get(checksum_algo.lower())
+
+        print(f"Initiating download of {os.path.basename(output_file)}...")
+        if expected_checksum:
+            print(f"Expected {checksum_algo.upper()} Checksum: {expected_checksum}")
+
+        try:
+            saved_path = f5functions.myf5_download_file(
+                download_url,
+                output_file,
+                expected_checksum=expected_checksum,
+                checksum_algo=checksum_algo,
+            )
+            print(f"✓ Download completed and verified: {saved_path}")
+        except ValueError as ve:
+            print(f"✗ Checksum verification FAILED: {ve}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"✗ Download failed: {e}")
+            sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
 # Doctor Pre-flight Check
 # ---------------------------------------------------------------------------
 
@@ -287,11 +470,14 @@ def cmd_doctor(args):
     print(f"   OpenSSL Version  : {ssl.OPENSSL_VERSION}")
 
     print(f"\n2. Credential Configuration:")
-    creds_path = os.path.expanduser("~/.ihealth_credentials")
-    if os.path.isfile(creds_path):
-        print(f"   ✓ Found ~/.ihealth_credentials")
+    f5_creds_path = os.path.expanduser("~/.f5api_credentials")
+    ih_creds_path = os.path.expanduser("~/.ihealth_credentials")
+    if os.path.isfile(f5_creds_path):
+        print(f"   ✓ Found ~/.f5api_credentials (primary API credential store)")
+    elif os.path.isfile(ih_creds_path):
+        print(f"   ✓ Found ~/.ihealth_credentials (legacy credential store)")
     else:
-        print(f"   ℹ ~/.ihealth_credentials not present (optional)")
+        print(f"   ℹ Neither ~/.f5api_credentials nor ~/.ihealth_credentials present")
 
     f5_cid = os.getenv("F5_CLIENT_ID") or os.getenv("IHEALTH_CLIENT_ID")
     if f5_cid:
@@ -342,6 +528,7 @@ def cmd_doctor(args):
 # ---------------------------------------------------------------------------
 
 def main():
+    f5functions.check_no_cli_secrets()
     parser = argparse.ArgumentParser(
         prog="qkviewmgr",
         description="qkviewmgr - Unified F5 BIG-IP, iHealth, and MyF5 Case Automation CLI",
@@ -352,7 +539,6 @@ def main():
     auto_parser = subparsers.add_parser("run", aliases=["auto"], help="One-touch auto-pilot: generate -> download -> purge remote -> upload to iHealth -> track")
     auto_parser.add_argument("--host", required=True, help="BIG-IP hostname or IP address")
     auto_parser.add_argument("--username", default=None, help="BIG-IP username (default: BIGIP_USERNAME env var or admin)")
-    auto_parser.add_argument("--password", default=None, help="BIG-IP password (optional; can be set via BIGIP_PASSWORD or interactive prompt)")
     auto_parser.add_argument("--no-ssl-verify", action="store_true", help="Disable SSL certificate verification for self-signed lab appliances")
     auto_parser.add_argument("--qkview-name", default=None, help="Name of QKView archive to generate")
     auto_parser.add_argument("--no-truncate", action="store_true", help="Generate complete QKView without truncating large log files (-s0)")
@@ -362,16 +548,13 @@ def main():
     auto_parser.add_argument("--case-number", default=None, help="Associate upload with MyF5 Support Case number")
     auto_parser.add_argument("--description", default=None, help="Description for iHealth upload")
     auto_parser.add_argument("--no-wait", action="store_true", help="Do not wait/poll for iHealth diagnostic completion")
-    auto_parser.add_argument("--client-id", default=None, help="F5 API Client ID (optional; resolves from env or ~/.ihealth_credentials)")
-    auto_parser.add_argument("--client-secret", default=None, help="F5 API Client Secret (optional; resolves from env or ~/.ihealth_credentials)")
-    auto_parser.add_argument("--profile", default=None, help="Profile/section in ~/.ihealth_credentials")
+    auto_parser.add_argument("--profile", default=None, help="Profile/section in ~/.f5api_credentials")
 
     # Subcommand: bigip
     bigip_parser = subparsers.add_parser("bigip", help="Direct BIG-IP appliance operations")
     bigip_parser.add_argument("action", choices=["test", "list", "status", "generate", "download", "delete"], help="BIG-IP operation")
     bigip_parser.add_argument("--host", required=True, help="BIG-IP hostname or IP address")
     bigip_parser.add_argument("--username", default=None, help="BIG-IP username (default: BIGIP_USERNAME env var or admin)")
-    bigip_parser.add_argument("--password", default=None, help="BIG-IP password (optional)")
     bigip_parser.add_argument("--no-ssl-verify", action="store_true", help="Disable SSL certificate verification")
     bigip_parser.add_argument("--filename", default="test.qkview", help="QKView filename on BIG-IP")
     bigip_parser.add_argument("--output", default="test.qkview", help="Local output destination for download")
@@ -382,9 +565,7 @@ def main():
     # Subcommand: ihealth
     ihealth_parser = subparsers.add_parser("ihealth", help="F5 iHealth API operations")
     ihealth_parser.add_argument("action", choices=["test", "list", "show", "upload"], help="iHealth operation")
-    ihealth_parser.add_argument("--client-id", default=None, help="Support API Client ID")
-    ihealth_parser.add_argument("--client-secret", default=None, help="Support API Client Secret")
-    ihealth_parser.add_argument("--profile", default=None, help="Profile in ~/.ihealth_credentials")
+    ihealth_parser.add_argument("--profile", default=None, help="Profile in ~/.f5api_credentials")
     ihealth_parser.add_argument("--app-id", default=f5functions.IHEALTH_APP_ID, help="App ID")
     ihealth_parser.add_argument("--qkview-id", default=None, help="QKView ID for show operation")
     ihealth_parser.add_argument("--filename", default=None, help="Path to local .qkview file for upload")
@@ -394,13 +575,29 @@ def main():
     # Subcommand: case
     case_parser = subparsers.add_parser("case", help="MyF5 Support Case Management")
     case_parser.add_argument("action", choices=["list", "create", "comment", "metadata"], help="Case operation")
-    case_parser.add_argument("--client-id", default=None, help="Support API Client ID")
-    case_parser.add_argument("--client-secret", default=None, help="Support API Client Secret")
-    case_parser.add_argument("--profile", default=None, help="Profile in ~/.ihealth_credentials")
+    case_parser.add_argument("--profile", default=None, help="Profile in ~/.f5api_credentials")
     case_parser.add_argument("--app-id", default=f5functions.MYF5_APP_ID, help="App ID")
     case_parser.add_argument("--case-number", default=None, help="Support case number")
     case_parser.add_argument("--comment", default=None, help="Comment text to add")
     case_parser.add_argument("--json-file", default=None, help="Path to case creation JSON file")
+
+    # Subcommand: downloads (api.software.downloads.f5.com)
+    downloads_parser = subparsers.add_parser("downloads", help="MyF5 Software Downloads API operations (Oct 2 URL update)")
+    downloads_parser.add_argument("action", choices=["metadata", "list-products", "versions", "links", "get"], help="Downloads operation")
+    downloads_parser.add_argument("--profile", default=None, help="Profile in ~/.f5api_credentials")
+    downloads_parser.add_argument("--app-id", default=f5functions.MYF5_APP_ID, help="App ID")
+    downloads_parser.add_argument("--api-fqdn", default=f5functions.MYF5_DOWNLOADS_API_FQDN, help=f"Downloads API FQDN (default: {f5functions.MYF5_DOWNLOADS_API_FQDN})")
+    downloads_parser.add_argument("--product-family", "--family", dest="product_family", default=None, help="Product family (e.g. 'BIG-IP')")
+    downloads_parser.add_argument("--product-line", "--product", dest="product_line", default=None, help="Product line (e.g. 'big-ip_v16.x')")
+    downloads_parser.add_argument("--product-version", "--version", dest="product_version", default=None, help="Product version (e.g. '16.1.2')")
+    downloads_parser.add_argument("--container", default=None, help="Container name / version (e.g. '16.1.2')")
+    downloads_parser.add_argument("--file-name", "--filename", dest="file_name", default=None, help="Software filename (e.g. 'BIGIP-16.1.2-0.0.18.iso')")
+    downloads_parser.add_argument("--language", default="english", help="Product language (default: 'english')")
+    downloads_parser.add_argument("--url", default=None, help="Direct download URL for 'get' action")
+    downloads_parser.add_argument("--output", "-o", default=None, help="Local file path to save downloaded image")
+    downloads_parser.add_argument("--checksum", default=None, help="Expected cryptographic hash for verification")
+    downloads_parser.add_argument("--checksum-algo", default="sha256", help="Checksum algorithm (sha256, md5, sha1; default: sha256)")
+    downloads_parser.add_argument("--json", action="store_true", help="Output raw JSON response")
 
     # Subcommand: doctor
     doctor_parser = subparsers.add_parser("doctor", help="Run pre-flight environment and network diagnostics")
@@ -431,6 +628,8 @@ def main():
         cmd_ihealth(args)
     elif args.subcommand == "case":
         cmd_case(args)
+    elif args.subcommand == "downloads":
+        cmd_downloads(args)
     elif args.subcommand == "doctor":
         cmd_doctor(args)
     elif args.subcommand == "gui":
