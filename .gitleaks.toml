@@ -9,6 +9,7 @@ paths = [
   '''(?i)tests/.*''',
   '''(?i).*_test\.py$''',
   '''(?i).*\.md$''',
+  '''(?i)openapi\.json$''',
 ]
 regexes = [
   '''UKKD3Vxv7NHrM3QmYk8Fk2mZnLtljAKX''',

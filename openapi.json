@@ -815,7 +815,7 @@
         "required": true,
         "schema": {
           "type": "string",
-          "example": "eyJraWQiOiJvalhpd1N4bll6ekRBVU5ENXl0N2prTjJEUnJJRFgxaEFuNWJzZm1rakc0IiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULnlONTNhZXpiTk5BOFdScUdLOXJwM2dMR21BSGl6NVdPT21UeTU4djlZNzgiLCJpc3MiOiJodHRwczovL2lkZW50aXR5LnByZXByb2QyLmFjY291bnQuZjVuZXR3b3Jrcy5uZXQvb2F1dGgyL2F1c3kyc2k1a3lLejdLdTR2MGg3IiwiYXVkIjoiYXBpOi8vaWhlYWx0aCIsImlhdCI6MTcwMjQ5Njg1NSwiZXhwIjoxNzAyNDk4NjU1LCJjaWQiOiIwb2ExeDh6Mjl3Z0Rkd2U1QjBoOCIsInNjcCI6WyJpaGVhbHRoIl0sInN1YiI6IjBvYTF4OHoyOXdnRGR3ZTVCMGg4In0.e3Rg_-iv3rLLkfz923KbboJncfcU1gBhk8lVJQV_SfZRZ_Xoiri7oo0wiAWwWnMauupMDt7oL8bZtytaJMycPrEzsQlyhYD0QaR2a0YK1B0TPeBvvbQGuDXVIgVgc51OY26MAL_OvwWKlM1mS9w0nRsIdfat-OMbPktryLgzBYapj9b_8xMTg34gNOabMk9-ghvQxq7zUGkDXySrOuBHQfEtyOavAyQxMoAQyNFSPENIyQuy6UUPGqdHvzV8UuniL4j2R3TT8DhrQIe-ZQ1CFVJT-Qrv1V9yDNbSyC4I619fPwJdoRpXEEP7G06pxREjC0Kt5i1lUAN99hwxLgCReA"
+          "example": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiYXVkIjoiYXBpOi8vaWhlYWx0aCJ9.ZXhhbXBsZV9zaWduYXR1cmU"
         }
       },
       "rateLimitParam": {
@@ -3680,7 +3680,7 @@
                 {
                   "etag": "7ac9c61ef52b3ee2becddb0ea9727d70-292",
                   "hosting": "AWS",
-                  "href": "https://downloads-usw-f5.s3.us-west-1.amazonaws.com/big-ip/big-ip_v16.x/16.1.2/english/16.1.2/BIGIP-16.1.2-0.0.18.iso?response-content-disposition=attachment%3B%20filename%3DBIGIP-16.1.2-0.0.18.iso&X-Amz-Security-Token=FwoGZXIvYXdzEPv%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaDHoxRow6FWvC%2BVC7ACKCAXM1ZOIfK7ar2ygBZCqa8zA9cmrPiitfEAX%2FaO7%2Bwwsz3mvu533p0khwpQ82%2F8xTMNLA8CGRrA6tyUgROm0%2BaP2iZjlbvsBhul%2FPaTG%2F%2FhLZ9Op9VA5wEpG0S5l9LUklLintrtagiJXYgtTEEVD%2F7Ml8MLWelVC1O%2FlUguug5mM1UX8ozPyytgYyKC%2B3MmHX%2Fvh6WIyBL6E31EWs7Wp%2FiuuicmK6IW%2FkKcwq0Ep3apsIkHI%3D&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20240826T174136Z&X-Amz-SignedHeaders=host&X-Amz-Expires=86395&X-Amz-Credential=ASIAWZEHK3GDDKZUVQ4E%2F20240826%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Signature=4628fdcb932ebedfd42c980ee0f15cd47a256adc37b637887a33b34b75e8837c",
+                  "href": "https://downloads-usw-f5.s3.us-west-1.amazonaws.com/big-ip/big-ip_v16.x/16.1.2/english/16.1.2/BIGIP-16.1.2-0.0.18.iso?response-content-disposition=attachment%3B%20filename%3DBIGIP-16.1.2-0.0.18.iso&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20240826T174136Z&X-Amz-SignedHeaders=host&X-Amz-Expires=86395&X-Amz-Credential=EXAMPLEKEYID12345678%2F20240826%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Signature=4628fdcb932ebedfd42c980ee0f15cd47a256adc37b637887a33b34b75e8837c",
                   "location": "USA - WEST COAST"
                 }
               ],
