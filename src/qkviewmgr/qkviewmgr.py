@@ -349,21 +349,37 @@ def cmd_downloads(args):
             sys.exit(1)
         resp = f5functions.myf5_get_product_versions(token, args.product_family, args.product_line, api_fqdn=api_fqdn)
         if resp.status_code == 200:
-            data = resp.json()
+            raw = resp.json()
             if getattr(args, "json", False):
-                print(json.dumps(data, indent=2))
+                print(json.dumps(raw, indent=2))
                 return
-            containers = data.get("data", {}).get("containers", [])
+            data = raw.get("data", raw) if isinstance(raw, dict) else {}
+            versions = data.get("versions") or (raw.get("versions", []) if isinstance(raw, dict) else [])
+            containers = data.get("containers", [])
             print(f"Product: {args.product_family} / {args.product_line}")
-            for c in containers:
-                cname = c.get("containerName", "N/A")
-                rel_date = c.get("releaseDate", "N/A")
-                print(f"\nContainer: {cname} (Released: {rel_date})")
-                files = c.get("files", [])
-                for f in files:
-                    fname = f.get("name") or f.get("fileName")
-                    fbytes = f.get("bytes") or "N/A"
-                    print(f"  - {fname} ({fbytes} bytes)")
+            if versions:
+                for v in versions:
+                    vname = v.get("version", "N/A")
+                    vdate = v.get("releaseDate", "N/A")
+                    print(f"\nVersion: {vname} (Released: {vdate})")
+                    for c in v.get("containers", []):
+                        cname = c.get("name") or c.get("container") or c.get("containerName", "N/A")
+                        cdate = c.get("releaseDate", "N/A")
+                        print(f"  Container: {cname} (Released: {cdate})")
+                        for f in c.get("files", []):
+                            fname = f.get("filename") or f.get("name") or f.get("fileName")
+                            fbytes = f.get("bytes") or "N/A"
+                            print(f"    - {fname} ({fbytes} bytes)")
+            elif containers:
+                for c in containers:
+                    cname = c.get("name") or c.get("container") or c.get("containerName", "N/A")
+                    rel_date = c.get("releaseDate", "N/A")
+                    print(f"\nContainer: {cname} (Released: {rel_date})")
+                    files = c.get("files", [])
+                    for f in files:
+                        fname = f.get("filename") or f.get("name") or f.get("fileName")
+                        fbytes = f.get("bytes") or "N/A"
+                        print(f"  - {fname} ({fbytes} bytes)")
         else:
             print(f"Failed to retrieve product versions: HTTP {resp.status_code}: {resp.text}")
             sys.exit(1)
@@ -384,20 +400,21 @@ def cmd_downloads(args):
             api_fqdn=api_fqdn,
         )
         if resp.status_code == 200:
-            data = resp.json()
+            raw = resp.json()
             if getattr(args, "json", False):
-                print(json.dumps(data, indent=2))
+                print(json.dumps(raw, indent=2))
                 return
-            links_data = data.get("data", {})
-            links = links_data.get("downloadLinks", [])
+            links_data = raw.get("data", raw) if isinstance(raw, dict) else {}
+            links = links_data.get("downloadLinks") or (raw.get("downloadLinks", []) if isinstance(raw, dict) else [])
             print(f"Download Links for {args.file_name}:")
             for lnk in links:
-                print(f"  Region : {lnk.get('title')}")
+                region = lnk.get('location') or lnk.get('region') or lnk.get('title') or lnk.get('hosting', 'Global')
+                print(f"  Region : {region}")
                 print(f"  URL    : {lnk.get('href')}\n")
-            meta = links_data.get("meta", {})
+            meta = links_data.get("meta") or (raw.get("meta", {}) if isinstance(raw, dict) else {})
             for h in ("sha256", "md5", "sha1", "sha384", "sha512"):
-                if meta.get(h):
-                    print(f"  {h.upper()}: {meta.get(h)}")
+                if meta.get(h) or links_data.get(h):
+                    print(f"  {h.upper()}: {meta.get(h) or links_data.get(h)}")
         else:
             print(f"Failed to retrieve download links: HTTP {resp.status_code}: {resp.text}")
             sys.exit(1)
@@ -420,9 +437,9 @@ def cmd_downloads(args):
         if resp.status_code != 200:
             print(f"Failed to retrieve download links: HTTP {resp.status_code}: {resp.text}")
             sys.exit(1)
-        data = resp.json()
-        links_data = data.get("data", {})
-        links = links_data.get("downloadLinks", [])
+        raw = resp.json()
+        links_data = raw.get("data", raw) if isinstance(raw, dict) else {}
+        links = links_data.get("downloadLinks") or (raw.get("downloadLinks", []) if isinstance(raw, dict) else [])
         if not links:
             print("No download links found in API response.")
             sys.exit(1)
@@ -431,8 +448,8 @@ def cmd_downloads(args):
         checksum_algo = getattr(args, "checksum_algo", "sha256")
         expected_checksum = args.checksum
         if not expected_checksum:
-            meta = links_data.get("meta", {})
-            expected_checksum = meta.get(checksum_algo.lower()) or data.get(checksum_algo.lower())
+            meta = links_data.get("meta") or (raw.get("meta", {}) if isinstance(raw, dict) else {})
+            expected_checksum = meta.get(checksum_algo.lower()) or links_data.get(checksum_algo.lower())
 
         print(f"Initiating download of {os.path.basename(output_file)}...")
         if expected_checksum:

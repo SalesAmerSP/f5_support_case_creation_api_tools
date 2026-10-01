@@ -286,6 +286,80 @@ class TestMyF5Downloads(unittest.TestCase):
             checksum_algo="sha256"
         )
 
+    @mock.patch("f5functions.myf5_authenticate", return_value="fake-token")
+    @mock.patch("f5functions.resolve_ihealth_credentials", return_value=("fake_cid", "fake_csec"))
+    @mock.patch("f5functions.myf5_get_product_versions")
+    def test_cmd_downloads_versions_geoip(self, mock_ver, mock_creds, mock_auth):
+        """Verify 'qkviewmgr downloads versions' handles root-level versions (GeoIP schema)."""
+        mock_resp = mock.MagicMock(status_code=200)
+        mock_resp.json.return_value = {
+            "family": "BIG-IP_Next",
+            "product": "GeoIP_Updates",
+            "versions": [
+                {
+                    "version": "1.0.0",
+                    "releaseDate": "2026-09-29",
+                    "containers": [
+                        {
+                            "container": "GeoIP_Updates",
+                            "files": [
+                                {"filename": "ip-geolocation-v3-20260928.zip", "bytes": "10661336"}
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+        mock_ver.return_value = mock_resp
+
+        test_args = [
+            "qkviewmgr", "downloads", "versions",
+            "--product-family", "BIG-IP_Next",
+            "--product-line", "GeoIP_Updates"
+        ]
+        with mock.patch("sys.argv", test_args):
+            with io.StringIO() as buf, contextlib.redirect_stdout(buf):
+                qkviewmgr.main()
+                out = buf.getvalue()
+
+        self.assertIn("Product: BIG-IP_Next / GeoIP_Updates", out)
+        self.assertIn("Version: 1.0.0", out)
+        self.assertIn("GeoIP_Updates", out)
+        self.assertIn("ip-geolocation-v3-20260928.zip", out)
+
+    @mock.patch("f5functions.myf5_authenticate", return_value="fake-token")
+    @mock.patch("f5functions.resolve_ihealth_credentials", return_value=("fake_cid", "fake_csec"))
+    @mock.patch("f5functions.myf5_get_download_file_links")
+    def test_cmd_downloads_links_geoip(self, mock_links, mock_creds, mock_auth):
+        """Verify 'qkviewmgr downloads links' handles root-level downloadLinks and location mirrors."""
+        mock_resp = mock.MagicMock(status_code=200)
+        mock_resp.json.return_value = {
+            "downloadLinks": [
+                {"hosting": "AWS", "href": "https://s3.amazonaws.com/geoip.zip", "location": "USA - WEST COAST"}
+            ],
+            "meta": {
+                "sha256": "abc123sha256"
+            }
+        }
+        mock_links.return_value = mock_resp
+
+        test_args = [
+            "qkviewmgr", "downloads", "links",
+            "--product-family", "BIG-IP_Next",
+            "--product-line", "GeoIP_Updates",
+            "--product-version", "1.0.0",
+            "--container", "GeoIP_Updates",
+            "--file-name", "ip-geolocation-v3-20260928.zip"
+        ]
+        with mock.patch("sys.argv", test_args):
+            with io.StringIO() as buf, contextlib.redirect_stdout(buf):
+                qkviewmgr.main()
+                out = buf.getvalue()
+
+        self.assertIn("Download Links for ip-geolocation-v3-20260928.zip", out)
+        self.assertIn("USA - WEST COAST", out)
+        self.assertIn("abc123sha256", out)
+
 
 if __name__ == "__main__":
     unittest.main()

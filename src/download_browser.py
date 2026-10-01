@@ -177,8 +177,9 @@ def cmd_versions(args, token=None):
         print(f"Error fetching versions: HTTP {resp.status_code} - {resp.text}", file=sys.stderr)
         return 1
 
-    data = resp.json().get("data", {})
-    versions = data.get("versions", [])
+    raw = resp.json()
+    data = raw.get("data", raw) if isinstance(raw, dict) else {}
+    versions = data.get("versions") or (raw.get("versions", []) if isinstance(raw, dict) else [])
     filt = getattr(args, "filter", None)
     if filt:
         versions = [v for v in versions if filt.lower() in v.get("version", "").lower()]
@@ -195,7 +196,7 @@ def cmd_versions(args, token=None):
         rel_date = v.get("releaseDate", "N/A")
         containers = v.get("containers", [])
         total_files = sum(len(c.get("files", [])) for c in containers)
-        c_names = ", ".join(c.get("name", "") for c in containers)
+        c_names = ", ".join(c.get("name") or c.get("container", "") for c in containers)
         print(f"{ver_name:<18} | {rel_date:<24} | {len(containers)} containers ({total_files} files) [{c_names}]")
     print()
     return 0
@@ -211,8 +212,9 @@ def cmd_files(args, token=None):
         print(f"Error fetching files: HTTP {resp.status_code} - {resp.text}", file=sys.stderr)
         return 1
 
-    data = resp.json().get("data", {})
-    versions = data.get("versions", [])
+    raw = resp.json()
+    data = raw.get("data", raw) if isinstance(raw, dict) else {}
+    versions = data.get("versions") or (raw.get("versions", []) if isinstance(raw, dict) else [])
     matched_ver = next((v for v in versions if v.get("version") == args.version), None)
     if not matched_ver:
         print(f"Version '{args.version}' not found for {args.family}/{args.line}.", file=sys.stderr)
@@ -221,13 +223,13 @@ def cmd_files(args, token=None):
     containers = matched_ver.get("containers", [])
     target_container = getattr(args, "container", None)
     if target_container:
-        containers = [c for c in containers if c.get("name") == target_container]
+        containers = [c for c in containers if (c.get("name") or c.get("container")) == target_container]
 
     filt = getattr(args, "filter", None)
 
     all_files = []
     for c in containers:
-        c_name = c.get("name")
+        c_name = c.get("name") or c.get("container", "")
         for f in c.get("files", []):
             if filt and filt.lower() not in f.get("filename", "").lower() and filt.lower() not in f.get("description", "").lower():
                 continue
@@ -265,9 +267,16 @@ def cmd_links(args, token=None):
         print(f"Error fetching file links: HTTP {resp.status_code} - {resp.text}", file=sys.stderr)
         return 1
 
-    data = resp.json().get("data", {})
+    raw = resp.json()
+    data = raw.get("data", raw) if isinstance(raw, dict) else {}
+    meta = data.get("meta") or (raw.get("meta", {}) if isinstance(raw, dict) else {})
+    links = data.get("downloadLinks") or (raw.get("downloadLinks", []) if isinstance(raw, dict) else [])
+    sha256 = data.get("sha256") or meta.get("sha256")
+    md5 = data.get("md5") or meta.get("md5")
+    file_bytes = data.get("bytes") or meta.get("bytes", 0)
+
     if getattr(args, "json", False):
-        print(json.dumps(data, indent=2))
+        print(json.dumps({"downloadLinks": links, "sha256": sha256, "md5": md5, "bytes": file_bytes}, indent=2))
         return 0
 
     print(f"\nDownload Details for: {args.file}")
@@ -276,12 +285,12 @@ def cmd_links(args, token=None):
     print(f"Product Line   : {args.line}")
     print(f"Version        : {args.version}")
     print(f"Container      : {container}")
-    print(f"File Size      : {format_bytes(data.get('bytes', 0))}")
-    print(f"SHA-256 Hash   : {data.get('sha256', 'N/A')}")
-    print(f"MD5 Hash       : {data.get('md5', 'N/A')}")
+    print(f"File Size      : {format_bytes(file_bytes)}")
+    print(f"SHA-256 Hash   : {sha256 or 'N/A'}")
+    print(f"MD5 Hash       : {md5 or 'N/A'}")
     print("\nRegional Download Mirrors:")
-    for link in data.get("downloadLinks", []):
-        reg = link.get("region", "Global")
+    for link in links:
+        reg = link.get("region") or link.get("location") or link.get("hosting", "Global")
         url = link.get("href", "")
         print(f"  [{reg}]")
         print(f"    {url}")
@@ -305,8 +314,10 @@ def cmd_download(args, token=None):
         print(f"Error retrieving download link: HTTP {resp.status_code} - {resp.text}", file=sys.stderr)
         return 1
 
-    data = resp.json().get("data", {})
-    links = data.get("downloadLinks", [])
+    raw = resp.json()
+    data = raw.get("data", raw) if isinstance(raw, dict) else {}
+    meta = data.get("meta") or (raw.get("meta", {}) if isinstance(raw, dict) else {})
+    links = data.get("downloadLinks") or (raw.get("downloadLinks", []) if isinstance(raw, dict) else [])
     if not links:
         print(f"No download mirrors returned for {args.file}.", file=sys.stderr)
         return 1
@@ -315,13 +326,17 @@ def cmd_download(args, token=None):
     chosen_link = links[0]
     if region_req:
         for l in links:
-            if region_req.lower() in l.get("region", "").lower():
+            reg_name = l.get("region") or l.get("location") or l.get("hosting", "")
+            if region_req.lower() in reg_name.lower():
                 chosen_link = l
                 break
 
     download_url = chosen_link.get("href")
-    expected_hash = data.get("sha256") or data.get("md5")
-    hash_algo = "sha256" if data.get("sha256") else "md5"
+    sha256 = data.get("sha256") or meta.get("sha256")
+    md5 = data.get("md5") or meta.get("md5")
+    file_bytes = data.get("bytes") or meta.get("bytes", 0)
+    expected_hash = sha256 or md5
+    hash_algo = "sha256" if sha256 else "md5"
     if getattr(args, "no_verify", False):
         expected_hash = None
 
@@ -332,8 +347,9 @@ def cmd_download(args, token=None):
     elif os.path.isdir(dest_path):
         dest_path = os.path.join(dest_path, args.file)
 
-    print(f"\nMirror Region  : {chosen_link.get('region', 'Default')}")
-    print(f"File Size      : {format_bytes(data.get('bytes', 0))}")
+    reg_name = chosen_link.get("region") or chosen_link.get("location") or chosen_link.get("hosting", "Default")
+    print(f"\nMirror Region  : {reg_name}")
+    print(f"File Size      : {format_bytes(file_bytes)}")
     if expected_hash:
         print(f"Integrity Check: {hash_algo.upper()} ({expected_hash})")
     print(f"Destination    : {os.path.abspath(dest_path)}")
@@ -531,8 +547,9 @@ def browse_interactive(args):
                 print(f"Error fetching versions: HTTP {v_resp.status_code}", file=sys.stderr)
                 continue
 
-            v_data = v_resp.json().get("data", {})
-            versions = v_data.get("versions", [])
+            v_raw = v_resp.json()
+            v_data = v_raw.get("data", v_raw) if isinstance(v_raw, dict) else {}
+            versions = v_data.get("versions") or (v_raw.get("versions", []) if isinstance(v_raw, dict) else [])
             if not versions:
                 print(f"No versions found for {line_name}.")
                 continue
@@ -570,7 +587,7 @@ def browse_interactive(args):
                 # Step 4: Select File
                 all_files = []
                 for c in containers:
-                    c_name = c.get("name")
+                    c_name = c.get("name") or c.get("container", "")
                     for f in c.get("files", []):
                         all_files.append({"container": c_name, **f})
 
@@ -617,21 +634,25 @@ def browse_interactive(args):
                         print(f"Error fetching links: HTTP {links_resp.status_code} - {links_resp.text}")
                         continue
 
-                    link_data = links_resp.json().get("data", {})
-                    download_links = link_data.get("downloadLinks", [])
-                    sha256 = link_data.get("sha256")
-                    md5 = link_data.get("md5")
+                    link_raw = links_resp.json()
+                    link_data = link_raw.get("data", link_raw) if isinstance(link_raw, dict) else {}
+                    link_meta = link_data.get("meta") or (link_raw.get("meta", {}) if isinstance(link_raw, dict) else {})
+                    download_links = link_data.get("downloadLinks") or (link_raw.get("downloadLinks", []) if isinstance(link_raw, dict) else [])
+                    sha256 = link_data.get("sha256") or link_meta.get("sha256")
+                    md5 = link_data.get("md5") or link_meta.get("md5")
+                    link_bytes = link_data.get("bytes") or link_meta.get("bytes") or selected_file.get("bytes", 0)
 
                     print("\n" + "=" * 60)
                     print(f"FILE DETAILS: {fn}")
                     print("=" * 60)
-                    print(f"Size         : {format_bytes(link_data.get('bytes', selected_file.get('bytes', 0)))}")
+                    print(f"Size         : {format_bytes(link_bytes)}")
                     print(f"Description  : {selected_file.get('description', 'N/A')}")
                     print(f"SHA-256 Hash : {sha256 or 'N/A'}")
                     print(f"MD5 Hash     : {md5 or 'N/A'}")
                     print(f"Mirrors      : {len(download_links)} region(s) available")
                     for dl in download_links:
-                        print(f"  • {dl.get('region', 'Mirror')}")
+                        dl_reg = dl.get("region") or dl.get("location") or dl.get("hosting", "Mirror")
+                        print(f"  • {dl_reg}")
                     print("=" * 60)
 
                     dl_confirm = input("\nDo you want to download this image now? [Y/n]: ").strip().lower()
@@ -648,8 +669,9 @@ def browse_interactive(args):
                     chosen_url = chosen_mirror.get("href")
                     expected_hash = sha256 or md5
                     hash_algo = "sha256" if sha256 else "md5"
+                    chosen_reg = chosen_mirror.get("region") or chosen_mirror.get("location") or chosen_mirror.get("hosting", "Mirror")
 
-                    print(f"\nInitiating streaming download from {chosen_mirror.get('region', 'Mirror')}...")
+                    print(f"\nInitiating streaming download from {chosen_reg}...")
                     try:
                         saved = f5functions.myf5_download_file(
                             chosen_url,

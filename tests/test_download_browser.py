@@ -291,6 +291,99 @@ class TestDownloadBrowser(unittest.TestCase):
             f5functions.MYF5_APP_ID, "cid", "csec", scope="myf5_scope", auth_fqdn="identity.api.f5.com"
         )
 
+    @mock.patch("f5functions.myf5_get_product_versions")
+    def test_cmd_versions_root_schema(self, mock_ver):
+        """Verify cmd_versions handles root-level versions and 'container' field (GeoIP schema)."""
+        mock_resp = mock.MagicMock(status_code=200)
+        mock_resp.json.return_value = {
+            "family": "BIG-IP_Next",
+            "product": "GeoIP_Updates",
+            "versions": [
+                {
+                    "version": "1.0.0",
+                    "releaseDate": "2026-09-29",
+                    "containers": [
+                        {
+                            "container": "GeoIP_Updates",
+                            "files": [{"filename": "ip-geolocation-v3-20260928.zip"}]
+                        }
+                    ]
+                }
+            ]
+        }
+        mock_ver.return_value = mock_resp
+        args = argparse.Namespace(family="BIG-IP_Next", line="GeoIP_Updates", filter=None, json=False, api_fqdn=f5functions.MYF5_DOWNLOADS_API_FQDN)
+        with io.StringIO() as buf, contextlib.redirect_stdout(buf):
+            rc = download_browser.cmd_versions(args, token="fake-token")
+            out = buf.getvalue()
+        self.assertEqual(rc, 0)
+        self.assertIn("1.0.0", out)
+        self.assertIn("GeoIP_Updates", out)
+
+    @mock.patch("f5functions.myf5_get_product_versions")
+    def test_cmd_files_container_field(self, mock_ver):
+        """Verify cmd_files handles 'container' attribute in container object."""
+        mock_resp = mock.MagicMock(status_code=200)
+        mock_resp.json.return_value = {
+            "family": "BIG-IP_Next",
+            "product": "GeoIP_Updates",
+            "versions": [
+                {
+                    "version": "1.0.0",
+                    "containers": [
+                        {
+                            "container": "GeoIP_Updates",
+                            "files": [
+                                {
+                                    "filename": "ip-geolocation-v3-20260928.zip",
+                                    "bytes": 10661336,
+                                    "description": "GeoIP Database"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+        mock_ver.return_value = mock_resp
+        args = argparse.Namespace(
+            family="BIG-IP_Next", line="GeoIP_Updates", version="1.0.0",
+            container="GeoIP_Updates", filter=None, json=False,
+            api_fqdn=f5functions.MYF5_DOWNLOADS_API_FQDN
+        )
+        with io.StringIO() as buf, contextlib.redirect_stdout(buf):
+            rc = download_browser.cmd_files(args, token="fake-token")
+            out = buf.getvalue()
+        self.assertEqual(rc, 0)
+        self.assertIn("ip-geolocation-v3-20260928.zip", out)
+        self.assertIn("GeoIP_Updates", out)
+
+    @mock.patch("f5functions.myf5_get_download_file_links")
+    def test_cmd_links_root_schema_and_location(self, mock_links):
+        """Verify cmd_links handles root downloadLinks, location mirrors, and meta checksums."""
+        mock_resp = mock.MagicMock(status_code=200)
+        mock_resp.json.return_value = {
+            "downloadLinks": [
+                {"hosting": "AWS", "href": "https://s3.amazonaws.com/test.zip", "location": "USA - WEST COAST"}
+            ],
+            "meta": {
+                "sha256": "abc123sha256",
+                "bytes": 10661336
+            }
+        }
+        mock_links.return_value = mock_resp
+        args = argparse.Namespace(
+            family="BIG-IP_Next", line="GeoIP_Updates", version="1.0.0",
+            container="GeoIP_Updates", file="ip-geolocation-v3-20260928.zip",
+            language="english", json=False, api_fqdn=f5functions.MYF5_DOWNLOADS_API_FQDN
+        )
+        with io.StringIO() as buf, contextlib.redirect_stdout(buf):
+            rc = download_browser.cmd_links(args, token="fake-token")
+            out = buf.getvalue()
+        self.assertEqual(rc, 0)
+        self.assertIn("USA - WEST COAST", out)
+        self.assertIn("abc123sha256", out)
+
 
 if __name__ == "__main__":
     unittest.main()
