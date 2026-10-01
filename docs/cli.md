@@ -19,6 +19,7 @@ qkviewmgr [--version] [-h] <subcommand> [options]
 | `bigip` | Direct BIG-IP appliance management (`test`, `list`, `generate`, `download`, `delete`) |
 | `ihealth` | Direct iHealth diagnostic operations (`test`, `list`, `show`, `upload`) |
 | `case` | MyF5 support case operations (`list`, `create`, `comment`, `metadata`) |
+| `downloads` | MyF5 software catalog & image downloads (`metadata`, `versions`, `links`, `get`) |
 | `gui` | Launch native desktop GUI (Tkinter, zero web services) |
 | `wizard` | Launch interactive terminal wizard |
 
@@ -150,3 +151,33 @@ qkviewmgr case create --json-file case_inputs.json
 # Add an update comment to an existing support case
 qkviewmgr case comment --case-number C1234567 --comment "Uploaded new diagnostic QKView file."
 ```
+
+---
+
+## 6. Direct MyF5 Software Downloads (`qkviewmgr downloads`)
+
+Interacts with the MyF5 Software Downloads API (`api.software.downloads.f5.com`):
+
+```bash
+# List all available product families and product lines
+qkviewmgr downloads metadata
+
+# List versions and containers for a specific product family and line
+qkviewmgr downloads versions --family BIG-IP --line big-ip_v16.x
+
+# Retrieve signed CDN download links and checksums for a specific file
+qkviewmgr downloads links \
+  --family BIG-IP \
+  --line big-ip_v16.x \
+  --version 16.1.2 \
+  --container 16.1.2 \
+  --filename BIGIP-16.1.2-0.0.18.iso
+
+# Download image file directly with streaming progress and SHA-256 verification
+qkviewmgr downloads get \
+  --url "https://downloads.f5.com/signed-url..." \
+  --output ./BIGIP-16.1.2-0.0.18.iso \
+  --checksum 9f82c... \
+  --checksum-algo sha256
+```
+
