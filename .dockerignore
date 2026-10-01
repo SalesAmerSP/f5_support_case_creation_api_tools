@@ -18,6 +18,7 @@ __pycache__
 .pytest_cache
 .coverage
 htmlcov
+.cache
 
 # OS and editor artifacts
 .DS_Store
@@ -29,15 +30,40 @@ htmlcov
 .env.*
 *.pem
 *.key
+*.crt
+*.cer
+*.der
+*.p12
+*.pfx
 .ihealth_credentials
 *ihealth_credentials*
+.f5api_credentials
+*f5api_credentials*
+.f5_credentials
+*f5_credentials*
 .ephemeral_id_rsa*
 id_rsa*
 id_ed25519*
 scratch/
 scratch
+.scratch/
 
-# Generated artifacts and dumps
+# Generated artifacts, backups, dumps and downloads
 *.qkview
+*.qkview.*
+*.ucs
+*.scf
+*.pcap
+*.pcapng
+*.iso
+*.img
+*.ova
+*.qcow2
+*.zip
+*.tar.gz
+*.tgz
+*.dat
+*.dat.gz
+*.bin
 *.sarif
 case_input*.json

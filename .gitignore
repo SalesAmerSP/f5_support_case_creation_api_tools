@@ -7,8 +7,20 @@
 # ------------------------------------------------------------------------------
 # BIG-IP diagnostic support bundles (contain sensitive configs, keys, and logs)
 *.qkview
+*.qkview.*
+
+# BIG-IP system backups, configuration exports, and diagnostics
+*.ucs
+*.scf
+bigip*.conf
+
+# Network packet captures & troubleshooting traces (contain raw payloads/PII)
+*.pcap
+*.pcapng
+*.cap
 
 # MyF5 Software Downloads & Virtual Edition Images (prevents multi-GB commits)
+*.im
 *.iso
 *.img
 *.ova
@@ -20,9 +32,28 @@
 *.vmdk
 *.tgz
 *.tar.gz
+*.tar.bz2
+*.tbz2
+*.bz2
+*.xz
+*.txz
+*.7z
 *.tar
 *.zip
 *.rpm
+*.deb
+
+# F5 Geolocation & IP intelligence database updates (GeoDB can exceed 500MB)
+*.dat
+*.dat.gz
+*.bin
+
+# Checksum, digest, and digital signature downloads accompanying images
+*.md5
+*.sha256
+*.sha512
+*.sig
+*.asc
 
 # Generated API case inputs, retrieved metadata, and local payload dumps
 *.json
@@ -32,6 +63,8 @@
 !examples/*.json
 !scripts/**/*.json
 !scripts/*.json
+!src/**/*.json
+!src/*.json
 !tests/**/*.json
 !tests/*.json
 !*.schema.json
@@ -49,6 +82,12 @@
 # Private certificates and keys
 *.pem
 *.key
+*.crt
+*.cer
+*.der
+*.p8
+*.p7b
+*.p7c
 *.p12
 *.pfx
 *.pkcs12
@@ -64,8 +103,16 @@ id_ed25519*
 .f5api_credentials
 *.f5api_credentials*
 *f5api_credentials*
+.f5_credentials
+*.f5_credentials*
+*f5_credentials*
 
 # General credential files (prevent accidental credentials commits while preserving docs)
+*.token
+*token*.json
+*token*.txt
+.netrc
+.auth
 *credentials*.ini
 *credentials*.json
 *credentials*.txt
@@ -79,10 +126,13 @@ id_ed25519*
 # ------------------------------------------------------------------------------
 # Python Bytecode & Packaging
 # ------------------------------------------------------------------------------
+.Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+*.manifest
+*.spec
 
 # Distribution / builds
 build/
@@ -90,28 +140,60 @@ dist/
 *.egg-info/
 *.egg
 *.whl
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.installed.cfg
+pip-log.txt
+pip-delete-this-directory.txt
 
 # Modern Virtual Environments
 .venv/
 venv/
 env/
 ENV/
+env.bak/
+venv.bak/
+.conda/
+.ipynb_checkpoints/
 
 # ------------------------------------------------------------------------------
 # Testing & Code Quality
 # ------------------------------------------------------------------------------
+.cache/
 .pytest_cache/
 .coverage
 .coverage.*
+coverage.json
+coverage.lcov
+coverage/
+*.cover
 htmlcov/
 coverage.xml
+nosetests.xml
+junit.xml
+test-results/
+report.xml
+reports/
 *.sarif
 pip-audit-results.sarif
 .tox/
 .nox/
 .mypy_cache/
+.dmypy.json
+dmypy.json
 .ruff_cache/
+.pyre/
+.pytype/
 .hypothesis/
+.benchmarks/
+.mutmut-cache/
 
 # ------------------------------------------------------------------------------
 # IDEs & Editors
@@ -126,6 +208,18 @@ pip-audit-results.sarif
 
 # JetBrains / PyCharm
 .idea/
+*.iml
+*.ipr
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Eclipse
+.project
+.pydevproject
+.settings/
 
 # ------------------------------------------------------------------------------
 # Operating System & General Temporary Files
@@ -133,16 +227,33 @@ pip-audit-results.sarif
 # macOS
 .DS_Store
 ._*
+.AppleDouble
+.LSOverride
+Icon
+Icon\r\r
+.Spotlight-V100
+.Trashes
+*.icloud
 
 # Windows
 Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
 [Dd]esktop.ini
+$RECYCLE.BIN/
 
-# General logs, editor swaps, and scratch space
+# General logs, editor swaps, crash dumps, and scratch space
+core.*
+*.core
+*.dmp
 *.log
 *.tmp
 *.swp
 *.swo
 *~
 .#*
+*.bak
+*.orig
+*.rej
 scratch/
+.scratch/
